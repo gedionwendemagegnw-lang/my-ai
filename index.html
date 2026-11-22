@@ -562,7 +562,7 @@ function rank(items, q, key){
   }).filter(function(x){ return x.s > 0; }).sort(function(a, b){ return b.s - a.s; });
 }
 function recent(){
-  var a = msgs.slice(-14);
+  var a = msgs.slice(-200);
   while(a.length && a[0].role !== "user"){ a.shift(); }
   return a;
 }
