@@ -202,18 +202,28 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
   var DEFAULTS = [
     {id:"gemini", name:"Gemini", kind:"gemini", base:"https://generativelanguage.googleapis.com/v1beta/models/", model:"gemini-3.5-flash-lite", key:"", on:true},
     {id:"groq", name:"Groq", kind:"openai", base:"https://api.groq.com/openai/v1/chat/completions", model:"llama-3.3-70b-versatile", key:"", on:true},
-    {id:"openrouter", name:"OpenRouter (free)", kind:"openai", base:"https://openrouter.ai/api/v1/chat/completions", model:"google/gemma-4-31b-it:free", key:"", on:true}
+    {id:"openrouter", name:"OpenRouter (free models)", kind:"openai", base:"https://openrouter.ai/api/v1/chat/completions", model:"google/gemma-4-31b-it:free", key:"", on:true}
+  ];
+  var PRESETS = [
+    {name:"Mistral", kind:"openai", base:"https://api.mistral.ai/v1/chat/completions", model:"mistral-small-latest"},
+    {name:"Cerebras", kind:"openai", base:"https://api.cerebras.ai/v1/chat/completions", model:"llama-3.3-70b"},
+    {name:"SambaNova", kind:"openai", base:"https://api.sambanova.ai/v1/chat/completions", model:"Meta-Llama-3.3-70B-Instruct"},
+    {name:"NVIDIA NIM", kind:"openai", base:"https://integrate.api.nvidia.com/v1/chat/completions", model:"meta/llama-3.3-70b-instruct"},
+    {name:"Hugging Face", kind:"openai", base:"https://router.huggingface.co/v1/chat/completions", model:"meta-llama/Llama-3.3-70B-Instruct"},
+    {name:"Together AI", kind:"openai", base:"https://api.together.xyz/v1/chat/completions", model:"meta-llama/Llama-3.3-70B-Instruct-Turbo"},
+    {name:"DeepSeek", kind:"openai", base:"https://api.deepseek.com/chat/completions", model:"deepseek-chat"},
+    {name:"xAI Grok", kind:"openai", base:"https://api.x.ai/v1/chat/completions", model:"grok-3-mini"},
+    {name:"OpenAI", kind:"openai", base:"https://api.openai.com/v1/chat/completions", model:"gpt-4o-mini"},
+    {name:"Claude (Anthropic)", kind:"anthropic", base:"https://api.anthropic.com/v1/messages", model:"claude-haiku-5-5"}
   ];
   var cool = {};
   function ls(){ try{ return root.localStorage; }catch(e){ return null; } }
   function load(){
     var s = ls(), saved = [];
     try{ saved = JSON.parse(s.getItem(KEY) || "[]"); }catch(e){}
-    var out = [];
-    saved.forEach(function(p){ out.push(p); });
+    var out = saved.slice();
     DEFAULTS.forEach(function(d){ if(!out.some(function(p){ return p.id === d.id; })){ out.push(JSON.parse(JSON.stringify(d))); } });
-    var gk = s && s.getItem("gkey");
-    var gm = s && s.getItem("gmodel2");
+    var gk = s && s.getItem("gkey"), gm = s && s.getItem("gmodel2");
     out.forEach(function(p){
       if(p.id === "gemini"){ if(!p.key && gk){ p.key = gk; } if(gm && !p.userModel){ p.model = gm; } }
     });
@@ -242,11 +252,7 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
     }
     flush(buf);
   }
-  function fail(res, p){
-    var e = new Error(p.name + " error " + res.status);
-    e.status = res.status;
-    return e;
-  }
+  function fail(res, p){ var e = new Error(p.name + " error " + res.status); e.status = res.status; return e; }
   async function callGemini(p, o, onDelta){
     var contents = o.messages.map(function(m){ return {role: m.role === "assistant" ? "model" : m.role, parts: [{text: m.text}]}; });
     if(o.image && contents.length){ contents[contents.length - 1].parts.push({inlineData: {mimeType: "image/jpeg", data: o.image}}); }
@@ -280,8 +286,24 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
     });
     return full;
   }
+  async function callAnthropic(p, o, onDelta){
+    var res = await fetch(p.base, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "x-api-key": p.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true"},
+      body: JSON.stringify({model: p.model, max_tokens: o.maxTokens || 1024, system: o.system || "", stream: true,
+        messages: o.messages.map(function(m){ return {role: m.role === "model" ? "assistant" : m.role, content: m.text}; })})
+    });
+    if(!res.ok){ throw fail(res, p); }
+    var full = "";
+    await readSSE(res, function(j){
+      if(j.type === "content_block_delta" && j.delta && j.delta.text){ full += j.delta.text; onDelta(j.delta.text); }
+    });
+    return full;
+  }
+  function fnFor(p){ return p.kind === "gemini" ? callGemini : p.kind === "anthropic" ? callAnthropic : callOpenAI; }
+  function why(e){ return e.status ? "error " + e.status : (e.name === "TypeError" ? "blocked by the browser, or offline" : e.message); }
 
-  /* o: {system, messages:[{role:"user"|"model",text}], image(base64 jpeg, optional), maxTokens, onDelta, onSwitch} */
+  /* o: {system, messages:[{role:"user"|"model",text}], image(base64 jpeg), maxTokens, onDelta, onSwitch} */
   async function chat(o){
     var list = load().filter(ready);
     if(o.image){ list = list.filter(function(p){ return p.kind === "gemini"; }); }
@@ -290,51 +312,89 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
     for(var i = 0; i < list.length; i++){
       var p = list[i], got = "";
       try{
-        var text = await (p.kind === "gemini" ? callGemini : callOpenAI)(p, o, function(d){ got += d; if(o.onDelta){ o.onDelta(d); } });
+        var text = await fnFor(p)(p, o, function(d){ got += d; if(o.onDelta){ o.onDelta(d); } });
         if(!text){ throw new Error(p.name + " sent no answer"); }
         return {text: text, provider: p.name, model: p.model};
       }catch(e){
         if(got){ throw e; }
         var s = e.status;
         cool[p.id] = Date.now() + (s === 429 ? 3600000 : s === 401 || s === 403 ? 86400000 : 60000);
-        notes.push(p.name + ": " + (s ? "error " + s : e.message));
+        notes.push(p.name + ": " + why(e));
         if(o.onSwitch && i < list.length - 1){ o.onSwitch(p.name, list[i + 1].name); }
       }
     }
     throw new Error("All providers failed. " + notes.join("; "));
   }
+  async function test(p){
+    try{
+      var t = await fnFor(p)(p, {system: "", messages: [{role: "user", text: "Reply with the single word OK."}], maxTokens: 30}, function(){});
+      return t ? "Works. Reply: " + t.slice(0, 40) : "Connected, but no text came back.";
+    }catch(e){ return "Problem: " + why(e); }
+  }
 
   function mountSettings(el){
     var list = load();
     el.innerHTML = "";
+    function mk(tag, css, txt){ var n = document.createElement(tag); if(css){ n.style.cssText = css; } if(txt != null){ n.textContent = txt; } return n; }
     list.forEach(function(p, i){
-      var box = document.createElement("div");
-      box.style.cssText = "border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0";
-      var head = document.createElement("div");
-      head.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px";
-      var nm = document.createElement("b"); nm.textContent = (i + 1) + ". " + p.name;
-      var tg = document.createElement("label"); tg.style.cssText = "display:flex;gap:6px;align-items:center";
+      var box = mk("div", "border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0");
+      var head = mk("div", "display:flex;justify-content:space-between;align-items:center;gap:8px");
+      head.appendChild(mk("b", "", (i + 1) + ". " + p.name));
+      var tg = mk("label", "display:flex;gap:6px;align-items:center");
       var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = p.on;
       cb.onchange = function(){ p.on = cb.checked; save(list); };
-      tg.appendChild(cb); tg.appendChild(document.createTextNode("On"));
-      head.appendChild(nm); head.appendChild(tg); box.appendChild(head);
-      var k = document.createElement("input"); k.type = "password"; k.autocomplete = "off";
+      tg.appendChild(cb); tg.appendChild(document.createTextNode("On")); head.appendChild(tg); box.appendChild(head);
+      var k = mk("input", "width:100%;margin-top:8px"); k.type = "password"; k.autocomplete = "off";
       k.placeholder = p.key ? "Key saved (ends in " + p.key.slice(-4) + "). Paste to replace." : "Paste API key";
-      k.style.cssText = "width:100%;margin-top:8px";
       k.onchange = function(){ if(k.value.trim()){ p.key = k.value.trim(); delete cool[p.id]; save(list); k.value = ""; k.placeholder = "Key saved (ends in " + p.key.slice(-4) + ")"; } };
-      var m = document.createElement("input"); m.type = "text"; m.value = p.model; m.style.cssText = "width:100%;margin-top:6px";
+      box.appendChild(k);
+      var m = mk("input", "width:100%;margin-top:6px"); m.type = "text"; m.value = p.model; m.setAttribute("aria-label", "Model name");
       m.onchange = function(){ p.model = m.value.trim() || p.model; p.userModel = true; save(list); };
-      box.appendChild(k); box.appendChild(m);
-      var row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px;margin-top:6px";
+      box.appendChild(m);
+      if(p.kind !== "gemini"){
+        var u = mk("input", "width:100%;margin-top:6px"); u.type = "text"; u.value = p.base; u.setAttribute("aria-label", "Endpoint URL");
+        u.onchange = function(){ p.base = u.value.trim() || p.base; save(list); };
+        box.appendChild(u);
+      }
+      var row = mk("div", "display:flex;gap:8px;margin-top:8px;flex-wrap:wrap");
       [["Up", -1], ["Down", 1]].forEach(function(x){
-        var b = document.createElement("button"); b.type = "button"; b.textContent = x[0];
+        var b = mk("button", "", x[0]); b.type = "button";
         b.onclick = function(){ var j = i + x[1]; if(j < 0 || j >= list.length){ return; } var t = list[i]; list[i] = list[j]; list[j] = t; save(list); mountSettings(el); };
         row.appendChild(b);
       });
-      box.appendChild(row); el.appendChild(box);
+      var out = mk("div", "font-size:13px;margin-top:6px;color:var(--muted)");
+      var tb = mk("button", "", "Test"); tb.type = "button";
+      tb.onclick = async function(){ out.textContent = "Testing…"; out.textContent = await test(p); };
+      row.appendChild(tb);
+      if(p.custom){
+        var rb = mk("button", "", "Remove"); rb.type = "button";
+        rb.onclick = function(){ list.splice(i, 1); save(list); mountSettings(el); };
+        row.appendChild(rb);
+      }
+      box.appendChild(row); box.appendChild(out); el.appendChild(box);
     });
+    var add = mk("div", "margin-top:12px");
+    add.appendChild(mk("div", "font-size:14px;margin-bottom:6px", "Add another AI"));
+    var sel = mk("select", "width:100%");
+    PRESETS.forEach(function(x, i){ var o = document.createElement("option"); o.value = i; o.textContent = x.name; sel.appendChild(o); });
+    var oc = document.createElement("option"); oc.value = "custom"; oc.textContent = "Custom (any compatible AI)"; sel.appendChild(oc);
+    var ab = mk("button", "margin-top:8px", "Add"); ab.type = "button";
+    ab.onclick = function(){
+      var p;
+      if(sel.value === "custom"){
+        var nm = prompt("Name of this AI"); if(!nm){ return; }
+        var bs = prompt("Chat address (ends in /chat/completions)"); if(!bs){ return; }
+        var md = prompt("Model name"); if(!md){ return; }
+        p = {name: nm, kind: "openai", base: bs, model: md};
+      } else { p = JSON.parse(JSON.stringify(PRESETS[+sel.value])); }
+      p.id = "c" + Date.now(); p.key = ""; p.on = true; p.custom = true;
+      list.push(p); save(list); mountSettings(el);
+    };
+    add.appendChild(sel); add.appendChild(ab);
+    add.appendChild(mk("div", "font-size:12px;color:var(--muted);margin-top:6px", "Model names change often. If Test shows a problem, check the model name on that company’s site."));
+    el.appendChild(add);
   }
-  root.Router = {chat: chat, mountSettings: mountSettings, load: load, save: save, resetCooldowns: function(){ cool = {}; }};
+  root.Router = {chat: chat, mountSettings: mountSettings, load: load, save: save, test: test, resetCooldowns: function(){ cool = {}; }};
 })(typeof window !== "undefined" ? window : globalThis);
 
 </script>
