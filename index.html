@@ -110,6 +110,9 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 .authf input{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:12px;font:inherit;font-size:16px}
 .authf button{width:100%;padding:13px;font-size:16px}
 [hidden]{display:none!important}
+#attach{width:38px;height:38px;padding:0;border-radius:50%;font-size:22px;flex:none}
+#attChip{margin:0 0 8px 8px;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#attChip button{padding:2px 10px;font-size:12px}
 .dlbox{margin-top:18px;text-align:center}
 .dlbox button{width:100%;padding:12px;font-size:15px}
 </style>
@@ -120,7 +123,7 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 <div class="hb"><button id="liveOpen" class="pri" type="button">Live</button></div>
 </header>
 <div id="log"></div>
-<form id="f"><div class="box"><textarea id="t" rows="1" placeholder="Message Arjun"></textarea><button id="b" type="submit" aria-label="Send">↑</button></div></form>
+<form id="f"><div id="attChip" hidden></div><div class="box"><button id="attach" type="button" aria-label="Attach file">+</button><input type="file" id="filePick" hidden><textarea id="t" rows="1" placeholder="Message Arjun"></textarea><button id="b" type="submit" aria-label="Send">↑</button></div></form>
 
 <div id="settings" class="sheet">
 <div class="top"><span>Settings</span><button id="done" class="pri" type="button">Done</button></div>
@@ -379,14 +382,23 @@ function parseSSE(chunk, onDelta){
   });
   return out;
 }
-async function askStream(onDelta){
+async function askStream(att, onDelta){
   var live = liveOn;
   var res = await fetch(BASE + encodeURIComponent(load("gmodel2") || DEFAULT_MODEL) + ":streamGenerateContent?alt=sse", {
     method: "POST",
     headers: {"Content-Type": "application/json", "x-goog-api-key": load("gkey")},
     body: JSON.stringify({
       systemInstruction: {parts: [{text: CHARACTER.prompt + (live ? LIVE_RULE : TEXT_RULE) + memoryText()}]},
-      contents: recent().map(function(m){ return {role: m.role, parts: [{text: m.text}]}; }),
+      contents: (function(hist){
+        return hist.map(function(m, i){
+          var parts = [{text: m.text}];
+          if(att && i === hist.length - 1){
+            if(att.text != null){ parts = [{text: m.text + "\n\n[File: " + att.name + "]\n" + att.text}]; }
+            else { parts = [{inlineData: {mimeType: att.mime, data: att.data}}, {text: m.text}]; }
+          }
+          return {role: m.role, parts: parts};
+        });
+      })(recent()),
       generationConfig: {maxOutputTokens: live ? 220 : 2048, temperature: 0.8}
     })
   });
@@ -410,14 +422,16 @@ async function askStream(onDelta){
 
 async function handle(text){
   text = (text || "").trim();
-  if(!text || busy){ return; }
+  if((!text && !pendingAtt) || busy){ return; }
   if(!load("gkey")){ openSettings(true); return; }
+  if(!text){ text = "Sir, please look at this file and tell me what you see."; }
   busy = true; $("b").disabled = true;
+  var att = pendingAtt; pendingAtt = null; showAtt();
   stopSpeech();
   if(rec){ rec.onend = null; try{ rec.abort(); }catch(e){} }
   if(!msgs.length){ $("log").innerHTML = ""; }
   msgs.push({role: "user", text: text});
-  bubble("u", text);
+  bubble("u", (att ? "📎 " + att.name + "\n" : "") + text);
   var wait = bubble("a", "…");
   setMood("thinking");
   if(liveOn){ $("cap").textContent = "“" + text + "”"; }
@@ -433,7 +447,7 @@ async function handle(text){
     if(fin && pend.trim()){ sp.push(pend.trim()); pend = ""; }
   }
   try{
-    var answer = await askStream(function(d){
+    var answer = await askStream(att, function(d){
       acc += d;
       wait.textContent = acc;
       $("log").scrollTop = $("log").scrollHeight;
@@ -863,6 +877,42 @@ $("dlApp").onclick = async function(){
   else { $("dlNote").textContent = "On a computer: click the install icon in the address bar, or open the browser menu and choose Install Arjun."; }
 };
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(function(){}); }
+
+var pendingAtt = null;
+function showAtt(){
+  var c = $("attChip");
+  c.innerHTML = "";
+  if(!pendingAtt){ c.hidden = true; return; }
+  c.hidden = false;
+  var sp = document.createElement("span");
+  sp.textContent = "📎 " + pendingAtt.name;
+  var rm = document.createElement("button");
+  rm.type = "button";
+  rm.textContent = "Remove";
+  rm.onclick = function(){ pendingAtt = null; showAtt(); };
+  c.appendChild(sp);
+  c.appendChild(rm);
+}
+$("attach").onclick = function(){ $("filePick").click(); };
+$("filePick").onchange = function(){
+  var f = this.files && this.files[0];
+  this.value = "";
+  if(!f){ return; }
+  if(f.size > 15 * 1024 * 1024){ alert("This file is too large. Please choose a file under 15 MB."); return; }
+  var textLike = /^text\/|json|xml|javascript/.test(f.type || "") || /\.(txt|md|csv|json|js|py|html|css|java|c|cpp|ts|xml|log|sql)$/i.test(f.name);
+  var r = new FileReader();
+  r.onload = function(){
+    if(textLike){
+      var t = String(r.result);
+      if(t.length > 300000){ alert("This text file is too long. Please send a shorter file."); return; }
+      pendingAtt = {name: f.name, text: t};
+    } else {
+      pendingAtt = {name: f.name, mime: f.type || "application/octet-stream", data: String(r.result).split(",")[1]};
+    }
+    showAtt();
+  };
+  if(textLike){ r.readAsText(f); } else { r.readAsDataURL(f); }
+};
 
 function applySubs(){
   var on = load("subs") !== "off";
