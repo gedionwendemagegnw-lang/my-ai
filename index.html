@@ -60,6 +60,11 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 @media (prefers-reduced-motion:reduce){#fig,.stage::before{animation:none!important}}
 #lstat{font-size:18px;color:#ffd08a;text-align:center;padding:0 16px}
 #cap{font-size:15px;line-height:1.5;text-align:center;padding:0 20px 16px;max-height:18vh;overflow-y:auto;min-height:3em}
+.mi{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px;line-height:1.4}
+.mi button{padding:4px 10px;font-size:13px;flex:none}
+.mrow{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+#settings details{margin:10px 0}
+#settings input[type=file]{width:100%;font-size:14px;margin:6px 0}
 </style>
 </head>
 <body>
@@ -89,7 +94,24 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 <button id="testv" type="button">Test voice</button>
 <div class="note" id="vnote">Arjun has one fixed voice.</div>
 </section>
-<section><h3>Chat</h3><button id="clr" type="button">Clear chat</button></section>
+<section>
+<h3>Memory</h3>
+<div class="note" id="memstat"></div>
+<details><summary>What Arjun remembers about you</summary>
+<div id="factlist"></div>
+<div style="display:flex;gap:8px;margin-top:8px"><input id="newfact" type="text" placeholder="Add something to remember"><button id="addfact" type="button">Add</button></div>
+</details>
+<details><summary>Files in memory</summary>
+<div id="notelist"></div>
+<label for="upl">Add a text file (.txt, .md, .csv, .json)</label>
+<input id="upl" type="file" accept=".txt,.md,.csv,.json,text/plain">
+</details>
+<div class="mrow"><button id="bk" type="button">Back up memory</button><button id="wipe" type="button">Erase all memory</button></div>
+<label for="rst">Restore from a backup file</label>
+<input id="rst" type="file" accept=".json,application/json">
+<div class="note">Arjun remembers facts about you, your past chats and your files, and uses them when they matter. Memory is saved on this phone.</div>
+</section>
+<section><h3>Chat</h3><button id="clr" type="button">Clear chat (memory stays)</button></section>
 </div>
 
 <div id="live" class="sheet">
@@ -291,8 +313,8 @@ async function askStream(onDelta){
     method: "POST",
     headers: {"Content-Type": "application/json", "x-goog-api-key": load("gkey")},
     body: JSON.stringify({
-      systemInstruction: {parts: [{text: CHARACTER.prompt + (live ? LIVE_RULE : TEXT_RULE)}]},
-      contents: msgs.map(function(m){ return {role: m.role, parts: [{text: m.text}]}; }),
+      systemInstruction: {parts: [{text: CHARACTER.prompt + (live ? LIVE_RULE : TEXT_RULE) + memoryText()}]},
+      contents: recent().map(function(m){ return {role: m.role, parts: [{text: m.text}]}; }),
       generationConfig: {maxOutputTokens: live ? 220 : 2048, temperature: 0.8}
     })
   });
@@ -347,6 +369,7 @@ async function handle(text){
       if(sp){ pend += d; drain(false); }
     });
     msgs.push({role: "model", text: answer});
+    if(msgs.length > 400){ msgs.splice(0, msgs.length - 400); }
     store("history", JSON.stringify(msgs));
     busy = false; $("b").disabled = false;
     if(sp){
@@ -357,6 +380,7 @@ async function handle(text){
     }
     setMood(liveOn ? "listening" : "idle");
     if(liveOn){ listen(); }
+    learn(/remember|don.t forget|note that|my name is/i.test(text));
   }catch(err){
     if(sp){ sp.end(); }
     if(!acc){ msgs.pop(); }
@@ -376,6 +400,7 @@ function maskState(){
 function openSettings(api){
   maskState();
   $("model").value = load("gmodel2") || DEFAULT_MODEL;
+  renderMemory();
   $("readaloud").checked = load("readaloud") === "1";
   $("apiBox").open = !!api || !load("gkey");
   $("settings").classList.add("open");
@@ -405,6 +430,146 @@ $("testv").onclick = async function(){
   setMood("idle");
 };
 $("clr").onclick = function(){ msgs = []; store("history", null); showHint(); $("settings").classList.remove("open"); };
+var facts = [], notes = [], sinceLearn = 0;
+function getJ(k, d){ try{ var v = JSON.parse(load(k)); return v == null ? d : v; }catch(e){ return d; } }
+facts = getJ("mem_facts", []);
+notes = getJ("mem_notes", []);
+function saveMem(){
+  store("mem_facts", JSON.stringify(facts));
+  try{ localStorage.setItem("mem_notes", JSON.stringify(notes)); return true; }catch(e){ return false; }
+}
+var STOP = {the:1, and:1, you:1, for:1, are:1, was:1, with:1, that:1, this:1, have:1, what:1, your:1, not:1, but:1, can:1, how:1, sir:1, arjun:1, please:1, tell:1, about:1, from:1, will:1};
+function words(s){ return (String(s).toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter(function(w){ return !STOP[w]; }); }
+function rank(items, q, key){
+  var qs = {};
+  words(q).forEach(function(w){ qs[w] = 1; });
+  return items.map(function(it){
+    var s = 0;
+    words(key(it)).forEach(function(w){ if(qs[w]){ s++; } });
+    return {it: it, s: s};
+  }).filter(function(x){ return x.s > 0; }).sort(function(a, b){ return b.s - a.s; });
+}
+function recent(){
+  var a = msgs.slice(-14);
+  while(a.length && a[0].role !== "user"){ a.shift(); }
+  return a;
+}
+function lastUser(){
+  for(var i = msgs.length - 1; i >= 0; i--){ if(msgs[i].role === "user"){ return msgs[i].text; } }
+  return "";
+}
+function cut(s, n){ return s.length > n ? s.slice(0, n) + "…" : s; }
+function memoryText(){
+  var q = lastUser(), out = "";
+  if(facts.length){ out += "\n\nLong-term memory, things you know about Sir:\n- " + facts.join("\n- "); }
+  var chunks = [];
+  notes.forEach(function(n){
+    for(var i = 0; i < n.text.length; i += 600){ chunks.push({name: n.name, text: n.text.slice(i, i + 700)}); }
+  });
+  var cs = rank(chunks, q, function(c){ return c.text; }).slice(0, 3);
+  if(cs.length){ out += "\n\nFrom files Sir saved in your memory (use if relevant):\n" + cs.map(function(x){ return "[" + x.it.name + "] " + x.it.text; }).join("\n---\n"); }
+  var old = [];
+  var cut14 = Math.max(0, msgs.length - 14);
+  for(var i = 0; i < cut14; i++){ if(msgs[i].role === "user" && msgs[i + 1]){ old.push({u: msgs[i].text, a: msgs[i + 1].text}); } }
+  var os = rank(old, q, function(p){ return p.u + " " + p.a; }).slice(0, 3);
+  if(os.length){ out += "\n\nRelevant earlier conversations with Sir:\n" + os.map(function(x){ return "Sir said: " + cut(x.it.u, 250) + " | You answered: " + cut(x.it.a, 300); }).join("\n"); }
+  if(out){ out += "\n\nUse this memory naturally, like a loyal partner who remembers. Do not mention the memory system itself."; }
+  return out;
+}
+function addFact(f){
+  f = String(f || "").trim();
+  if(!f || f.length > 200){ return false; }
+  var low = f.toLowerCase();
+  for(var i = 0; i < facts.length; i++){ if(facts[i].toLowerCase() === low){ return false; } }
+  facts.push(f);
+  if(facts.length > 80){ facts.shift(); }
+  return true;
+}
+async function learn(force){
+  sinceLearn++;
+  if(!force && sinceLearn < 4){ return; }
+  sinceLearn = 0;
+  try{
+    var convo = msgs.slice(-8).map(function(m){ return (m.role === "user" ? "Sir: " : "Arjun: ") + m.text; }).join("\n");
+    var res = await fetch(BASE + encodeURIComponent(load("gmodel2") || DEFAULT_MODEL) + ":generateContent", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "x-goog-api-key": load("gkey")},
+      body: JSON.stringify({
+        contents: [{role: "user", parts: [{text: "Known facts about Sir:\n" + (facts.join("\n") || "none") + "\n\nRecent conversation:\n" + convo + "\n\nList NEW lasting facts about Sir worth remembering (name, family, job, goals, likes, dislikes, plans, important events). Skip known facts and anything temporary. Reply with ONLY a JSON array of short strings, or [] if none."}]}],
+        generationConfig: {maxOutputTokens: 300, temperature: 0}
+      })
+    });
+    var d = await res.json();
+    var txt = d.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
+    var arr = JSON.parse(txt);
+    if(Array.isArray(arr)){ var added = false; arr.forEach(function(f){ if(addFact(f)){ added = true; } }); if(added){ saveMem(); } }
+  }catch(e){}
+}
+function renderMemory(){
+  $("memstat").textContent = facts.length + " remembered facts, " + notes.length + " files, " + msgs.length + " saved messages.";
+  var fl = $("factlist");
+  fl.innerHTML = "";
+  if(!facts.length){ fl.innerHTML = '<div class="note">Nothing yet. Arjun learns as you talk, or add something below.</div>'; }
+  facts.forEach(function(f, i){
+    var r = document.createElement("div"); r.className = "mi";
+    var s = document.createElement("span"); s.textContent = f;
+    var b2 = document.createElement("button"); b2.type = "button"; b2.textContent = "Delete";
+    b2.onclick = function(){ facts.splice(i, 1); saveMem(); renderMemory(); };
+    r.appendChild(s); r.appendChild(b2); fl.appendChild(r);
+  });
+  var nl = $("notelist");
+  nl.innerHTML = "";
+  if(!notes.length){ nl.innerHTML = '<div class="note">No files yet.</div>'; }
+  notes.forEach(function(n, i){
+    var r = document.createElement("div"); r.className = "mi";
+    var s = document.createElement("span"); s.textContent = n.name + " (" + Math.round(n.text.length / 1000) + " KB)";
+    var b2 = document.createElement("button"); b2.type = "button"; b2.textContent = "Delete";
+    b2.onclick = function(){ notes.splice(i, 1); saveMem(); renderMemory(); };
+    r.appendChild(s); r.appendChild(b2); nl.appendChild(r);
+  });
+}
+$("addfact").onclick = function(){ if(addFact($("newfact").value)){ saveMem(); } $("newfact").value = ""; renderMemory(); };
+$("upl").onchange = function(){
+  var f = this.files[0];
+  if(!f){ return; }
+  var rd = new FileReader();
+  rd.onload = function(){
+    var txt = String(rd.result).slice(0, 200000);
+    notes.push({name: f.name, text: txt});
+    if(!saveMem()){ notes.pop(); alert("Not enough space on this phone for that file. Try a smaller one."); }
+    $("upl").value = "";
+    renderMemory();
+  };
+  rd.readAsText(f);
+};
+$("bk").onclick = function(){
+  var blob = new Blob([JSON.stringify({facts: facts, notes: notes, history: msgs})], {type: "application/json"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "arjun-memory.json";
+  document.body.appendChild(a); a.click(); a.remove();
+};
+$("rst").onchange = function(){
+  var f = this.files[0];
+  if(!f){ return; }
+  var rd = new FileReader();
+  rd.onload = function(){
+    try{
+      var d = JSON.parse(rd.result);
+      (d.facts || []).forEach(function(x){ addFact(x); });
+      (d.notes || []).forEach(function(n){ if(n && n.name && n.text){ notes.push(n); } });
+      if(Array.isArray(d.history) && d.history.length){ msgs = d.history; store("history", JSON.stringify(msgs)); restore(); }
+      saveMem(); renderMemory();
+      alert("Memory restored.");
+    }catch(e){ alert("That file could not be read."); }
+    $("rst").value = "";
+  };
+  rd.readAsText(f);
+};
+$("wipe").onclick = function(){
+  if(!confirm("Erase all facts and files from Arjun’s memory?")){ return; }
+  facts = []; notes = []; saveMem(); renderMemory();
+};
 $("liveOpen").onclick = startLive;
 $("endLive").onclick = endLive;
 $("fig").onclick = function(){ stopSpeech(); if(liveOn){ setMood("idle"); listen(); } };
