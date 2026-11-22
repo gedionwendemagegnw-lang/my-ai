@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Arjun</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#d4620a">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <style>
 :root{--bg:#faf9f5;--panel:#ffffff;--text:#1f1e1d;--muted:#73726c;--line:#e3e1d8;--user:#efede4;--acc:#d4620a;--accText:#ffffff;box-sizing:border-box}
 @media (prefers-color-scheme:dark){:root{--bg:#262624;--panel:#30302e;--text:#eeede8;--muted:#a3a198;--line:#43423e;--user:#3a3936;--acc:#f0883a;--accText:#1a0e03;color-scheme:dark}}
@@ -106,6 +110,8 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 .authf input{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:12px;font:inherit;font-size:16px}
 .authf button{width:100%;padding:13px;font-size:16px}
 [hidden]{display:none!important}
+.dlbox{margin-top:18px;text-align:center}
+.dlbox button{width:100%;padding:12px;font-size:15px}
 </style>
 </head>
 <body>
@@ -167,6 +173,7 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 <div class="tabs"><button id="tabLogin" class="pri" type="button">Login</button><button id="tabCreate" type="button">Create account</button></div>
 <form id="loginForm" class="authf"><input id="lEmail" type="email" placeholder="Email" autocomplete="email" required><input id="lPass" type="password" placeholder="Password" autocomplete="current-password" required><button id="lBtn" class="pri" type="submit" disabled>Login</button></form>
 <form id="signForm" class="authf" hidden><input id="sName" type="text" placeholder="Name" autocomplete="name" required><input id="sEmail" type="email" placeholder="Email" autocomplete="email" required><input id="sPass" type="password" placeholder="Password (at least 6 characters)" autocomplete="new-password" minlength="6" required><button id="sBtn" class="pri" type="submit" disabled>Create account</button></form>
+<div class="dlbox"><button id="dlApp" type="button">Download the Arjun app</button><div class="note" id="dlNote"></div></div>
 <div class="note" id="lmsg">Checking sign-in…</div>
 <details id="setup"><summary>First-time setup</summary>
 <ol><li>Create a free project at console.firebase.google.com.</li><li>Build, then Authentication, then turn on the Email/Password sign-in provider.</li><li>Build, then Firestore Database, then create a database. Under Rules, allow each user to read and write only their own document: match /users/{uid} allow read, write if request.auth != null and request.auth.uid == uid.</li><li>In Authentication settings, add gedionwendemagegnw-lang.github.io under Authorized domains.</li><li>In Project settings, add a Web app, then paste its config here.</li></ol>
@@ -739,7 +746,6 @@ function cloudPush(){
   }, 800);
 }
 async function enterApp(){
-  await cloudPull();
   loadUser();
   $("uname").textContent = user.displayName || pendingName || "You";
   $("uemail").textContent = user.email || "";
@@ -747,6 +753,12 @@ async function enterApp(){
   $("login").classList.remove("open");
   setMood("idle");
   restore(); renderChats();
+  var before = JSON.stringify([facts, notes, chats]);
+  await cloudPull();
+  if(cloudReady){
+    loadUser();
+    if(JSON.stringify([facts, notes, chats]) !== before){ restore(); renderChats(); }
+  }
 }
 function parseCfg(txt){
   var o = {};
@@ -771,11 +783,14 @@ async function initAuth(){
   }
   try{
     await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
-    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js");
-    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js");
+    await Promise.all([
+      loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"),
+      loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js")
+    ]);
     firebase.initializeApp(cfg);
     fbAuth = firebase.auth();
     fbDb = firebase.firestore();
+    fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){});
     fbAuth.onAuthStateChanged(function(u){
       if(u){ user = u; enterApp(); }
       else { user = null; $("login").classList.add("open"); $("lBtn").disabled = false; $("sBtn").disabled = false; $("lmsg").textContent = ""; }
@@ -831,6 +846,24 @@ $("signForm").onsubmit = async function(e){
   catch(err){ $("lmsg").textContent = authMsg(err); }
   $("sBtn").disabled = false;
 };
+
+var deferredInstall = null;
+window.addEventListener("beforeinstallprompt", function(e){ e.preventDefault(); deferredInstall = e; });
+window.addEventListener("appinstalled", function(){ deferredInstall = null; $("dlNote").textContent = "Arjun is installed on this device."; });
+$("dlApp").onclick = async function(){
+  if(deferredInstall){
+    deferredInstall.prompt();
+    var choice = await deferredInstall.userChoice;
+    deferredInstall = null;
+    $("dlNote").textContent = choice.outcome === "accepted" ? "Installing Arjun…" : "";
+    return;
+  }
+  var ua = navigator.userAgent || "";
+  if(/iPhone|iPad|iPod/.test(ua)){ $("dlNote").textContent = "On iPhone: open this page in Safari, tap the Share button, then Add to Home Screen."; }
+  else if(/Android/.test(ua)){ $("dlNote").textContent = "On Android: open the browser menu (three dots), then tap Install app or Add to Home screen."; }
+  else { $("dlNote").textContent = "On a computer: click the install icon in the address bar, or open the browser menu and choose Install Arjun."; }
+};
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(function(){}); }
 
 function applySubs(){
   var on = load("subs") !== "off";
