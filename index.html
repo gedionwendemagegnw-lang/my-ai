@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My AI</title>
+<style>
+:root{--bg:#f7f6f2;--card:#ffffff;--text:#1f1f1d;--muted:#6b6a64;--accent:#534ab7;--border:#dcdad2;--danger:#a32d2d;box-sizing:border-box}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1b19;--card:#2a2926;--text:#eeede8;--muted:#a3a198;--accent:#7f77dd;--border:#3b3a36;--danger:#f09595;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+header b{font-weight:500;font-size:17px}
+.hb{display:flex;gap:8px}
+.hb button{background:var(--card);color:var(--text);border:1px solid var(--border);padding:6px 12px;font-size:14px}
+#settings{display:none;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--card)}
+#settings.open{display:block}
+#settings label{display:block;font-size:13px;color:var(--muted);margin:8px 0 4px}
+#settings input{width:100%;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:10px;padding:10px;font:inherit;font-size:16px}
+#settings .note{font-size:12px;color:var(--muted);margin-top:8px}
+#chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.m{max-width:85%;padding:10px 14px;border-radius:16px;line-height:1.5;font-size:16px;white-space:pre-wrap;word-wrap:break-word}
+.u{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.a{align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px}
+.err{color:var(--danger)}
+.hint{color:var(--muted);text-align:center;font-size:14px;margin-top:20px}
+form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border)}
+textarea{flex:1;resize:none;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:14px;padding:10px 12px;font:inherit;font-size:16px;max-height:120px}
+button{border:0;background:var(--accent);color:#fff;border-radius:14px;padding:0 18px;font:inherit;font-weight:500;cursor:pointer}
+button:disabled{opacity:.5}
+</style>
+</head>
+<body>
+<header>
+<b>My AI</b>
+<div class="hb"><button id="clr" type="button">Clear</button><button id="gear" type="button">Settings</button></div>
+</header>
+<div id="settings">
+<label for="key">Gemini API key</label>
+<input id="key" type="password" autocomplete="off" placeholder="Paste your key here">
+<label for="model">Model name</label>
+<input id="model" type="text" autocomplete="off">
+<button id="save" type="button" style="margin-top:12px;padding:10px 18px">Save</button>
+<div class="note">Your key is saved only on this phone, in this browser. Never share this page with the key inside it.</div>
+</div>
+<div id="chat"></div>
+<form id="f">
+<textarea id="t" rows="1" placeholder="Type a message…"></textarea>
+<button id="b" type="submit">Send</button>
+</form>
+<script>
+var INSTRUCTIONS = "You are a friendly, helpful AI assistant. Keep answers clear and short, and use simple words.";
+var DEFAULT_MODEL = "gemini-3.5-flash";
+var chat = document.getElementById("chat");
+var t = document.getElementById("t");
+var b = document.getElementById("b");
+var settings = document.getElementById("settings");
+var keyEl = document.getElementById("key");
+var modelEl = document.getElementById("model");
+var msgs = [];
+var busy = false;
+
+function store(k, v){ try{ if(v === null){ localStorage.removeItem(k); } else { localStorage.setItem(k, v); } }catch(e){} }
+function load(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+
+function bubble(cls, text){
+  var h = document.getElementById("hint");
+  if(h){ h.remove(); }
+  var d = document.createElement("div");
+  d.className = "m " + cls;
+  d.textContent = text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+
+function showHint(){
+  chat.innerHTML = "";
+  var h = document.createElement("div");
+  h.className = "hint";
+  h.id = "hint";
+  h.textContent = load("gkey") ? "Say hello to start." : "Tap Settings and paste your key first.";
+  chat.appendChild(h);
+}
+
+function restore(){
+  try{ msgs = JSON.parse(load("history") || "[]"); }catch(e){ msgs = []; }
+  keyEl.value = load("gkey") || "";
+  modelEl.value = load("gmodel") || DEFAULT_MODEL;
+  if(!msgs.length){ showHint(); return; }
+  chat.innerHTML = "";
+  msgs.forEach(function(m){ bubble(m.role === "user" ? "u" : "a", m.text); });
+}
+
+document.getElementById("gear").onclick = function(){ settings.classList.toggle("open"); };
+document.getElementById("save").onclick = function(){
+  store("gkey", keyEl.value.trim());
+  store("gmodel", modelEl.value.trim() || DEFAULT_MODEL);
+  settings.classList.remove("open");
+  if(!msgs.length){ showHint(); }
+};
+document.getElementById("clr").onclick = function(){
+  msgs = []; store("history", null); showHint();
+};
+
+async function ask(){
+  var key = load("gkey");
+  var model = load("gmodel") || DEFAULT_MODEL;
+  var body = {
+    systemInstruction: {parts:[{text: INSTRUCTIONS}]},
+    contents: msgs.map(function(m){ return {role: m.role, parts:[{text: m.text}]}; })
+  };
+  var res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
+    method: "POST",
+    headers: {"Content-Type": "application/json", "x-goog-api-key": key},
+    body: JSON.stringify(body)
+  });
+  var data = await res.json();
+  if(!res.ok){
+    var m = data && data.error && data.error.message ? data.error.message : "Error " + res.status;
+    throw new Error(m);
+  }
+  var parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+  var text = parts ? parts.map(function(p){ return p.text || ""; }).join("") : "";
+  if(!text){ throw new Error("The AI sent no answer. Try again."); }
+  return text;
+}
+
+document.getElementById("f").addEventListener("submit", async function(e){
+  e.preventDefault();
+  var text = t.value.trim();
+  if(!text || busy){ return; }
+  if(!load("gkey")){ settings.classList.add("open"); return; }
+  busy = true; b.disabled = true; t.value = "";
+  msgs.push({role:"user", text:text});
+  bubble("u", text);
+  var thinking = bubble("a", "Thinking…");
+  try{
+    var answer = await ask();
+    thinking.textContent = answer;
+    msgs.push({role:"model", text:answer});
+    store("history", JSON.stringify(msgs));
+  }catch(err){
+    msgs.pop();
+    thinking.className = "m a err";
+    thinking.textContent = "Problem: " + err.message;
+  }
+  chat.scrollTop = chat.scrollHeight;
+  busy = false; b.disabled = false; t.focus();
+});
+
+restore();
+</script>
+</body>
+</html>
