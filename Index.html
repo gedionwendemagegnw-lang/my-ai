@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Arjun AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-app: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-elevated: #f1f5f9;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border-subtle: rgba(15, 23, 42, 0.1);
+      --bubble-user: #2563eb;
+      --bubble-user-text: #ffffff;
+      --bubble-ai: #e2e8f0;
+      --bubble-ai-text: #0f172a;
+      --accent: #2563eb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-app: #090d16;
+        --bg-surface: #111827;
+        --bg-elevated: #1e293b;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-subtle: rgba(255, 255, 255, 0.1);
+        --bubble-user: #3b82f6;
+        --bubble-user-text: #ffffff;
+        --bubble-ai: #1e293b;
+        --bubble-ai-text: #f8fafc;
+        --accent: #3b82f6;
+      }
+    }
+
+    html.theme-light {
+      --bg-app: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-elevated: #f1f5f9;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border-subtle: rgba(15, 23, 42, 0.1);
+      --bubble-user: #2563eb;
+      --bubble-user-text: #ffffff;
+      --bubble-ai: #e2e8f0;
+      --bubble-ai-text: #0f172a;
+      --accent: #2563eb;
+    }
+
+    html.theme-dark {
+      --bg-app: #090d16;
+      --bg-surface: #111827;
+      --bg-elevated: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-subtle: rgba(255, 255, 255, 0.1);
+      --bubble-user: #3b82f6;
+      --bubble-user-text: #ffffff;
+      --bubble-ai: #1e293b;
+      --bubble-ai-text: #f8fafc;
+      --accent: #3b82f6;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      height: 100dvh;
+      width: 100%;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-app);
+      color: var(--text-main);
+      overflow: hidden;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      height: 100dvh;
+      width: 100%;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    #log {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      scroll-behavior: smooth;
+    }
+
+    .m {
+      max-width: min(86%, 42rem);
+      padding: 0.75rem 1rem;
+      border-radius: 1.15rem;
+      line-height: 1.5;
+      font-size: 0.95rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+      animation: msgFadeIn 0.2s ease-out;
+    }
+
+    @keyframes msgFadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .m.u {
+      align-self: flex-end;
+      background-color: var(--bubble-user);
+      color: var(--bubble-user-text);
+      border-bottom-right-radius: 0.3rem;
+    }
+
+    .m.a {
+      align-self: flex-start;
+      background-color: var(--bubble-ai);
+      color: var(--bubble-ai-text);
+      border: 1px solid var(--border-subtle);
+      border-bottom-left-radius: 0.3rem;
+    }
+
+    .m.err {
+      align-self: center;
+      background-color: rgba(239, 68, 68, 0.14);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      font-size: 0.875rem;
+    }
+
+    .m-meta {
+      display: block;
+      font-size: 0.7rem;
+      opacity: 0.68;
+      margin-top: 0.35rem;
+    }
+
+    #composer-area {
+      background-color: var(--bg-surface);
+      border-top: 1px solid var(--border-subtle);
+      padding: 0.65rem 0.85rem;
+    }
+
+    #prompt-input {
+      width: 100%;
+      max-height: 120px;
+      min-height: 44px;
+      resize: none;
+      overflow-y: auto;
+      border-radius: 1.15rem;
+      background-color: var(--bg-elevated);
+      color: var(--text-main);
+      border: 1px solid var(--border-subtle);
+      padding: 0.65rem 0.95rem;
+      font-size: 0.95rem;
+      line-height: 1.35;
+      outline: none;
+    }
+
+    #prompt-input:focus {
+      border-color: var(--accent);
+    }
+
+    #b {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      border-radius: 9999px;
+      background-color: var(--accent);
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.2s ease, background-color 0.2s ease;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+
+    #b:hover:not(:disabled) {
+      transform: scale(1.04);
+    }
+
+    #b:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    #b:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* Live Talking HUD (#live) */
+    #live {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      background:
+        radial-gradient(circle at 50% 24%, rgba(56, 189, 248, 0.22), transparent 48%),
+        radial-gradient(circle at 20% 80%, rgba(168, 85, 247, 0.16), transparent 50%),
+        linear-gradient(180deg, #060a14 0%, #0d1526 55%, #070b14 100%);
+      color: #f8fafc;
+      padding: calc(env(safe-area-inset-top) + 1rem) 1.25rem calc(env(safe-area-inset-bottom) + 1.25rem);
+      overflow: hidden;
+    }
+
+    #live.active {
+      display: flex;
+      animation: liveFadeIn 0.25s ease-out;
+    }
+
+    @keyframes liveFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Colored waving lines above Arjun's face */
+    .wave-stage {
+      position: relative;
+      width: 100%;
+      max-width: 340px;
+      height: 76px;
+      margin: 0 auto 0.35rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .wave-bar {
+      width: 6px;
+      height: 14px;
+      border-radius: 999px;
+      transform-origin: center;
+      transition: height 0.14s ease;
+      box-shadow: 0 0 12px currentColor;
+    }
+
+    .live-talking .wave-bar {
+      animation: wavePulse 0.85s ease-in-out infinite;
+    }
+
+    .live-listening .wave-bar {
+      animation: waveListen 1.25s ease-in-out infinite;
+    }
+
+    @keyframes wavePulse {
+      0%, 100% { height: 12px; opacity: 0.65; }
+      50% { height: 64px; opacity: 1; }
+    }
+
+    @keyframes waveListen {
+      0%, 100% { height: 10px; opacity: 0.45; }
+      50% { height: 34px; opacity: 0.9; }
+    }
+
+    /* Arjun character face in upper-middle of screen */
+    .arjun-avatar-wrap {
+      position: relative;
+      width: 136px;
+      height: 136px;
+      margin: 0 auto;
+      border-radius: 999px;
+      padding: 4px;
+      background: conic-gradient(from 0deg, #38bdf8, #818cf8, #e879f9, #34d399, #38bdf8);
+      box-shadow: 0 0 36px rgba(56, 189, 248, 0.35);
+    }
+
+    .live-talking .arjun-avatar-wrap {
+      animation: avatarGlow 1.3s ease-in-out infinite alternate;
+    }
+
+    @keyframes avatarGlow {
+      from { transform: scale(1); box-shadow: 0 0 28px rgba(56, 189, 248, 0.35); }
+      to { transform: scale(1.04); box-shadow: 0 0 46px rgba(168, 85, 247, 0.55); }
+    }
+
+    .arjun-mouth-talking {
+      animation: mouthTalk 0.24s ease-in-out infinite alternate;
+      transform-origin: 60px 84px;
+    }
+
+    @keyframes mouthTalk {
+      from { transform: scaleY(0.55); }
+      to { transform: scaleY(1.35); }
+    }
+
+    .arjun-blink {
+      animation: eyeBlink 4.2s infinite;
+      transform-origin: center;
+    }
+
+    @keyframes eyeBlink {
+      0%, 94%, 100% { transform: scaleY(1); }
+      97% { transform: scaleY(0.1); }
+    }
+
+    /* Settings Drawer / Modal (#settings) */
+    #settings-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      background-color: rgba(2, 6, 23, 0.65);
+      backdrop-filter: blur(6px);
+      justify-content: flex-end;
+    }
+
+    #settings-backdrop.open {
+      display: flex;
+    }
+
+    #settings {
+      width: 100%;
+      max-width: 460px;
+      height: 100%;
+      background-color: var(--bg-surface);
+      border-left: 1px solid var(--border-subtle);
+      overflow-y: auto;
+      padding: calc(env(safe-area-inset-top) + 1rem) 1rem calc(env(safe-area-inset-bottom) + 1.5rem);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- Top Header Bar -->
+    <header class="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] shrink-0">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-sky-500 via-indigo-500 to-fuchsia-500 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow">
+          A
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-semibold text-sm sm:text-base truncate">Arjun AI</h1>
+            <span id="net-badge" class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-medium">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Online
+            </span>
+          </div>
+          <p id="active-account-label" class="text-xs text-[var(--text-muted)] truncate">Guest Session • Memory Ready</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button
+          id="open-live-btn"
+          type="button"
+          class="px-3 py-2 rounded-full text-xs sm:text-sm font-medium bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow hover:opacity-95 transition flex items-center gap-1.5"
+          aria-label="Start Live Talking with Arjun"
+        >
+          <span>●</span>
+          <span>Live</span>
+        </button>
+        <button
+          id="open-settings-btn"
+          type="button"
+          class="p-2.5 rounded-full bg-[var(--bg-elevated)] text-[var(--text-main)] border border-[var(--border-subtle)] hover:opacity-90 transition"
+          aria-label="Open Settings and Account"
+        >
+          ⚙
+        </button>
+      </div>
+    </header>
+
+    <!-- Wake Phrase Quick Bar (when wake listener enabled or user wants quick trigger) -->
+    <div id="wake-strip" class="px-3 py-1.5 bg-[var(--bg-elevated)]/70 border-b border-[var(--border-subtle)] flex items-center justify-between gap-2 text-xs text-[var(--text-muted)] shrink-0">
+      <span id="wake-status-text" class="truncate">
+        Wake phrases: "chat wake up", "chat", "hello arjun", "arjun"
+      </span>
+      <button
+        id="sim-wake-btn"
+        type="button"
+        class="px-2.5 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)] font-medium hover:border-sky-500 transition shrink-0"
+      >
+        Say "Hello Arjun"
+      </button>
+    </div>
+
+    <!-- Toast / Status Banner (replaces alert/confirm) -->
+    <div id="toast-banner" class="hidden mx-3 mt-2 px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-medium border flex items-center justify-between gap-2 shrink-0" role="status">
+      <span id="toast-message"></span>
+      <button id="toast-close" type="button" class="text-xs opacity-75 hover:opacity-100 px-1.5 py-0.5 rounded" aria-label="Dismiss message">✕</button>
+    </div>
+
+    <!-- Conversation Log -->
+    <main id="log" aria-live="polite" aria-label="Conversation messages"></main>
+
+    <!-- Bottom Input Composer -->
+    <div id="composer-area" class="shrink-0">
+      <form id="chat-form" class="flex items-end gap-2 max-w-4xl mx-auto">
+        <textarea
+          id="prompt-input"
+          rows="1"
+          placeholder='Message Arjun... or say "chat wake up", "hello arjun"'
+          aria-label="Message input"
+        ></textarea>
+        <button
+          id="b"
+          type="submit"
+          aria-label="Send message"
+          title="Send message"
+        >
+          ➤
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Settings, Account & Web App Installer Drawer (#settings) -->
+  <div id="settings-backdrop" aria-hidden="true">
+    <aside id="settings" role="dialog" aria-modal="true" aria-label="Arjun AI Settings, Account, and Web App">
+      <div class="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
+        <div>
+          <h2 class="text-lg font-bold">Settings & Web App</h2>
+          <p class="text-xs text-[var(--text-muted)]">Account memory, first-time setup, app install & permissions</p>
+        </div>
+        <button
+          id="close-settings-btn"
+          type="button"
+          class="px-3 py-1.5 rounded-full text-sm font-medium bg-[var(--bg-elevated)] border border-[var(--border-subtle)] hover:opacity-90"
+        >
+          Done
+        </button>
+      </div>
+
+      <!-- 1. Account: Create Account & Login (Same email = Same memory) -->
+      <section class="p-3.5 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-sm">1. Account & Persistent Memory</h3>
+          <span id="account-mode-pill" class="text-[11px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 font-medium">
+            Email Synced
+          </span>
+        </div>
+        <p class="text-xs text-[var(--text-muted)]">
+          Create an account or log in with your email. Logging into the same email on any session restores your exact chat history, memories, and settings.
+        </p>
+
+        <!-- Auth Mode Tabs -->
+        <div class="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+          <button id="tab-login" type="button" class="py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition">
+            Log In
+          </button>
+          <button id="tab-signup" type="button" class="py-1.5 rounded-lg text-xs font-semibold text-[var(--text-muted)] transition">
+            Create Account
+          </button>
+        </div>
+
+        <form id="auth-form" class="space-y-2.5">
+          <div id="signup-name-row" class="hidden">
+            <label for="auth-name" class="block text-xs font-medium mb-1">Full Name</label>
+            <input
+              id="auth-name"
+              type="text"
+              placeholder="Your name"
+              class="w-full px-3 py-2 rounded-xl text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] outline-none focus:border-sky-500"
+            />
+          </div>
+          <div>
+            <label for="auth-email" class="block text-xs font-medium mb-1">Email Address</label>
+            <input
+              id="auth-email"
+              type="email"
+              required
+              placeholder="you@example.com"
+              class="w-full px-3 py-2 rounded-xl text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] outline-none focus:border-sky-500"
+            />
+          </div>
+          <div>
+            <label for="auth-password" class="block text-xs font-medium mb-1">Passcode / Password</label>
+            <input
+              id="auth-password"
+              type="password"
+              required
+              placeholder="••••••••"
+              class="w-full px-3 py-2 rounded-xl text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] outline-none focus:border-sky-500"
+            />
+          </div>
+          <div class="flex items-center gap-2 pt-1">
+            <button
+              id="auth-submit-btn"
+              type="submit"
+              class="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold bg-sky-600 hover:bg-sky-500 text-white transition"
+            >
+              Log In & Restore Memory
+            </button>
+            <button
+              id="logout-btn"
+              type="button"
+              class="py-2.5 px-3 rounded-xl text-xs font-medium bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:bg-rose-500/10 hover:text-rose-400 transition"
+            >
+              Sign Out
+            </button>
+          </div>
+        </form>
+
+        <div id="saved-accounts-list" class="pt-2 border-t border-[var(--border-subtle)] space-y-1.5">
+          <div class="text-[11px] font-medium text-[var(--text-muted)]">Saved Email Memories on This Device:</div>
+          <div id="email-chips" class="flex flex-wrap gap-1.5"></div>
+        </div>
+      </section>
+
+      <!-- 2. First-Time Web Setup inside Web Settings -->
+      <section class="p-3.5 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-sm">2. First-Time Web Setup</h3>
+          <span id="setup-status-badge" class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium">
+            Configured
+          </span>
+        </div>
+        <p class="text-xs text-[var(--text-muted)]">
+          Customize how Arjun greets you, responds, and remembers facts tied to your active email.
+        </p>
+
+        <div>
+          <label for="setup-user-name" class="block text-xs font-medium mb-1">What should Arjun call you?</label>
+          <input
+            id="setup-user-name"
+            type="text"
+            placeholder="e.g. Gedion"
+            class="w-full px-3 py-2 rounded-xl text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] outline-none focus:border-sky-500"
+          />
+        </div>
+
+        <div>
+          <label for="setup-personality" class="block text-xs font-medium mb-1">Arjun Response Style</label>
+          <select
+            id="setup-personality"
+            class="w-full px-3 py-2 rounded-xl text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] outline-none focus:border-sky-500"
+          >
+            <option value="friendly">Friendly & Proactive</option>
+            <option value="concise">Crisp & Direct</option>
+            <option value="mentor">Thoughtful Mentor</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="setup-theme" class="block text-xs font-medium mb-1">Appearance Theme</label>
+          <select
+            id="setup-theme"
+            class="w-full px-3 py-2 rounded-xl text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] outline-none focus:border-sky-500"
+          >
+            <option value="system">System Default (Auto Dark/Light)</option>
+            <option value="dark">Dark Mode</option>
+            <option value="light">Light Mode</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="setup-memory-notes" class="block text-xs font-medium mb-1">Core Memory Notes (Saved to Current Email)</label>
+          <textarea
+            id="setup-memory-notes"
+            rows="2"
+            placeholder="Key projects, preferences, or facts Arjun should always keep in mind..."
+            class="w-full px-3 py-2 rounded-xl text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] outline-none focus:border-sky-500 resize-none"
+          ></textarea>
+        </div>
+
+        <button
+          id="save-setup-btn"
+          type="button"
+          class="w-full py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition"
+        >
+          Save Setup & Memory
+        </button>
+      </section>
+
+      <!-- 3. Downloadable Web App Version (PWA Installer) -->
+      <section class="p-3.5 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-sm">3. Downloadable Web App Version</h3>
+          <span id="pwa-state-badge" class="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-medium">
+            Web App Ready
+          </span>
+        </div>
+        <p class="text-xs text-[var(--text-muted)]">
+          Install Arjun AI directly onto your phone or desktop as a standalone Web App, or download the web app manifest package for quick deployment.
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <button
+            id="install-pwa-btn"
+            type="button"
+            class="flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition"
+          >
+            Install Web App
+          </button>
+          <a
+            id="download-manifest-link"
+            download="arjun-ai-manifest.webmanifest"
+            class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-emerald-500 transition text-center"
+          >
+            Download Manifest
+          </a>
+        </div>
+      </section>
+
+      <!-- 4. App Version Permissions: Voice, Camera, Screen/Whole Device & Wake Listener -->
+      <section class="p-3.5 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-3">
+        <div>
+          <h3 class="font-semibold text-sm">4. App Permissions & Device Access</h3>
+          <p class="text-xs text-[var(--text-muted)] mt-0.5">
+            Grant permissions for voice, camera, whole-device screen awareness, and network wake phrases ("chat wake up", "chat", "hello arjun", "arjun").
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <!-- Microphone / Voice -->
+          <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+            <div>
+              <div class="text-xs font-semibold">Microphone & Voice</div>
+              <div id="perm-mic-status" class="text-[11px] text-[var(--text-muted)]">Not granted yet</div>
+            </div>
+            <button id="req-mic-btn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white hover:bg-sky-500 transition">
+              Allow Voice
+            </button>
+          </div>
+
+          <!-- Camera -->
+          <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+            <div>
+              <div class="text-xs font-semibold">Camera Access</div>
+              <div id="perm-cam-status" class="text-[11px] text-[var(--text-muted)]">Not granted yet</div>
+            </div>
+            <button id="req-cam-btn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white hover:bg-sky-500 transition">
+              Allow Camera
+            </button>
+          </div>
+
+          <!-- Whole Device / Screen View -->
+          <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+            <div>
+              <div class="text-xs font-semibold">See Whole Device (Screen & App Context)</div>
+              <div id="perm-screen-status" class="text-[11px] text-[var(--text-muted)]">Standby / Simulated context available</div>
+            </div>
+            <button id="req-screen-btn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition">
+              Enable Device View
+            </button>
+          </div>
+
+          <!-- Network Wake Word Listener -->
+          <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+            <div>
+              <div class="text-xs font-semibold">Network Wake Listener</div>
+              <div id="perm-wake-status" class="text-[11px] text-[var(--text-muted)]">Listens when network is connected</div>
+            </div>
+            <label class="inline-flex items-center cursor-pointer">
+              <input id="wake-toggle-input" type="checkbox" checked class="sr-only peer" />
+              <div class="w-10 h-6 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 relative"></div>
+            </label>
+          </div>
+
+          <!-- Subtitles Default Toggle -->
+          <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+            <div>
+              <div class="text-xs font-semibold">Live Subtitles</div>
+              <div class="text-[11px] text-[var(--text-muted)]">Show captions during Live Talking</div>
+            </div>
+            <label class="inline-flex items-center cursor-pointer">
+              <input id="subtitle-pref-input" type="checkbox" checked class="sr-only peer" />
+              <div class="w-10 h-6 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 relative"></div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Danger / Clear History for Current Email -->
+      <section class="p-3 rounded-2xl border border-rose-500/25 bg-rose-500/5 flex items-center justify-between gap-2">
+        <div class="text-xs">
+          <div class="font-semibold text-rose-400">Reset Current Email Chat</div>
+          <div class="text-[var(--text-muted)]">Clears messages for active email only</div>
+        </div>
+        <button id="clear-chat-btn" type="button" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 text-white hover:bg-rose-500 transition">
+          Clear Chat
+        </button>
+      </section>
+    </aside>
+  </div>
+
+  <!-- Live Talking Overlay (#live) -->
+  <section id="live" aria-label="Arjun Live Talking Mode">
+    <!-- Top Controls -->
+    <div class="flex items-center justify-between gap-2 z-10">
+      <div class="flex items-center gap-2">
+        <span id="live-network-pill" class="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+          Network Connected
+        </span>
+        <span id="live-device-eye-pill" class="px-2.5 py-1 rounded-full text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-400/30">
+          Device View Active
+        </span>
+      </div>
+      <button
+        id="close-live-btn"
+        type="button"
+        class="px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur transition"
+      >
+        End Live ✕
+      </button>
+    </div>
+
+    <!-- Center-Upper Stage: Colored Waving Lines ABOVE Arjun's Face -->
+    <div class="flex flex-col items-center justify-center my-auto z-10">
+      <!-- Colored wave lines above Arjun's face -->
+      <div id="live-wave-stage" class="wave-stage live-talking" aria-hidden="true">
+        <span class="wave-bar" style="background:#38bdf8;color:#38bdf8;animation-delay:0s;"></span>
+        <span class="wave-bar" style="background:#818cf8;color:#818cf8;animation-delay:0.08s;"></span>
+        <span class="wave-bar" style="background:#e879f9;color:#e879f9;animation-delay:0.16s;"></span>
+        <span class="wave-bar" style="background:#f43f5e;color:#f43f5e;animation-delay:0.24s;"></span>
+        <span class="wave-bar" style="background:#fb923c;color:#fb923c;animation-delay:0.32s;"></span>
+        <span class="wave-bar" style="background:#facc15;color:#facc15;animation-delay:0.40s;"></span>
+        <span class="wave-bar" style="background:#34d399;color:#34d399;animation-delay:0.48s;"></span>
+        <span class="wave-bar" style="background:#2dd4bf;color:#2dd4bf;animation-delay:0.36s;"></span>
+        <span class="wave-bar" style="background:#38bdf8;color:#38bdf8;animation-delay:0.28s;"></span>
+        <span class="wave-bar" style="background:#a855f7;color:#a855f7;animation-delay:0.20s;"></span>
+        <span class="wave-bar" style="background:#ec4899;color:#ec4899;animation-delay:0.12s;"></span>
+        <span class="wave-bar" style="background:#60a5fa;color:#60a5fa;animation-delay:0.04s;"></span>
+      </div>
+
+      <!-- Arjun Character Face SVG in Upper-Middle -->
+      <div class="arjun-avatar-wrap">
+        <div class="w-full h-full rounded-full bg-slate-900 flex items-center justify-center overflow-hidden">
+          <svg viewBox="0 0 120 120" class="w-full h-full" role="img" aria-label="Arjun character face">
+            <defs>
+              <linearGradient id="arjunSkin" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#e0a97d" />
+                <stop offset="100%" stop-color="#c48758" />
+              </linearGradient>
+              <linearGradient id="arjunHair" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#1e293b" />
+                <stop offset="100%" stop-color="#090d16" />
+              </linearGradient>
+            </defs>
+            <!-- Soft aura circle -->
+            <circle cx="60" cy="60" r="56" fill="#0f172a" />
+            <!-- Shoulders / Collar -->
+            <path d="M22 114 C26 92, 42 84, 60 84 C78 84, 94 92, 98 114 Z" fill="#1d4ed8" />
+            <path d="M46 86 L60 103 L74 86" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" />
+            <!-- Neck -->
+            <rect x="51" y="72" width="18" height="16" rx="8" fill="#c48758" />
+            <!-- Ears -->
+            <ellipse cx="29" cy="58" rx="6" ry="10" fill="#c48758" />
+            <ellipse cx="91" cy="58" rx="6" ry="10" fill="#c48758" />
+            <!-- Head / Face -->
+            <path d="M32 54 C32 32, 44 22, 60 22 C76 22, 88 32, 88 54 C88 74, 75 84, 60 84 C45 84, 32 74, 32 54 Z" fill="url(#arjunSkin)" />
+            <!-- Styled Hair -->
+            <path d="M30 48 C29 24, 46 14, 65 15 C82 16, 92 28, 90 48 C85 36, 75 30, 61 30 C47 30, 36 37, 30 48 Z" fill="url(#arjunHair)" />
+            <!-- Eyebrows -->
+            <path d="M40 46 Q47 42 53 45" fill="none" stroke="#1e293b" stroke-width="2.8" stroke-linecap="round" />
+            <path d="M67 45 Q73 42 80 46" fill="none" stroke="#1e293b" stroke-width="2.8" stroke-linecap="round" />
+            <!-- Eyes -->
+            <g class="arjun-blink">
+              <circle cx="47" cy="53" r="4.3" fill="#0f172a" />
+              <circle cx="48.5" cy="51.5" r="1.5" fill="#ffffff" />
+              <circle cx="73" cy="53" r="4.3" fill="#0f172a" />
+              <circle cx="74.5" cy="51.5" r="1.5" fill="#ffffff" />
+            </g>
+            <!-- Subtle Nose -->
+            <path d="M60 52 L58 63 L62 64" fill="none" stroke="#9a6137" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            <!-- Animated Talking Mouth -->
+            <g id="arjun-mouth" class="arjun-mouth-talking">
+              <ellipse cx="60" cy="72" rx="8.5" ry="5" fill="#7f1d1d" />
+              <path d="M53 71 Q60 69 67 71" fill="none" stroke="#fecdd3" stroke-width="1.6" stroke-linecap="round" />
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="mt-3 text-center">
+        <div class="text-base sm:text-lg font-bold tracking-tight">Arjun</div>
+        <div id="live-mode-status" class="text-xs text-sky-300 mt-0.5">Talking • Seeing Whole Device</div>
+      </div>
+
+      <!-- Whole-Device Awareness Preview Strip -->
+      <div id="device-awareness-card" class="mt-3 w-full max-w-md rounded-2xl bg-white/5 border border-white/10 p-2.5 text-xs text-slate-200 backdrop-blur">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <span class="font-semibold text-sky-300">Whole-Device Context</span>
+          <button id="refresh-device-scan-btn" type="button" class="text-[11px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-200 hover:bg-sky-500/30 transition">
+            Scan Device Now
+          </button>
+        </div>
+        <p id="device-context-summary" class="text-[11px] text-slate-300 leading-relaxed">
+          Viewing full device workspace: active chat & settings, viewport dimensions, network link, and current user memory.
+        </p>
+      </div>
+    </div>
+
+    <!-- Subtitles Box (Toggleable via Subtitle Button) -->
+    <div class="z-10 flex flex-col items-center gap-3 max-w-xl w-full mx-auto">
+      <div
+        id="live-subtitle-box"
+        class="w-full min-h-[58px] px-4 py-2.5 rounded-2xl bg-black/65 border border-white/15 backdrop-blur-md text-center text-sm sm:text-base font-medium text-white shadow-lg"
+      >
+        <span id="live-subtitle-text">Hey! I am Arjun. Say "chat wake up", "chat", "hello arjun", or "arjun" anytime when connected.</span>
+      </div>
+
+      <!-- Bottom Live Action Bar: Subtitle Toggle + Speak / Ask Prompt -->
+      <div class="flex flex-wrap items-center justify-center gap-2 w-full">
+        <button
+          id="toggle-subtitle-btn"
+          type="button"
+          class="px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-sky-500 text-slate-950 hover:bg-sky-400 transition shadow"
+          aria-pressed="true"
+        >
+          Subtitles: ON
+        </button>
+
+        <button
+          id="live-speak-prompt-btn"
+          type="button"
+          class="px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/20 border border-white/15 text-white transition"
+        >
+          Ask About Device
+        </button>
+
+        <button
+          id="live-listen-mic-btn"
+          type="button"
+          class="px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-purple-600 hover:bg-purple-500 text-white transition"
+        >
+          Voice Turn
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    /**
+     * Arjun AI Client Application
+     * - Email-keyed persistent accounts & memories in localStorage
+     * - First-time setup inside Web Settings
+     * - Dynamic Web App Manifest & beforeinstallprompt installer
+     * - App permissions (Microphone, Camera, Whole-Device Screen/Context, Network Wake Word Listener)
+     * - Live Talking HUD (#live) with colored waving bars above Arjun's face & toggleable subtitles
+     */
+    (function () {
+      "use strict";
+
+      const STORAGE_KEYS = {
+        ACCOUNTS: "arjun_ai_accounts_v1",
+        ACTIVE_EMAIL: "arjun_ai_active_email_v1"
+      };
+
+      const WAKE_PHRASES = ["chat wake up", "chat", "hello arjun", "arjun"];
+
+      // Application state
+      const state = {
+        authMode: "login", // "login" | "signup"
+        activeEmail: null,
+        accounts: {},
+        deferredInstallPrompt: null,
+        liveOpen: false,
+        liveTalking: true,
+        subtitlesVisible: true,
+        speechRecognition: null,
+        wakeListenerActive: false,
+        activeMediaStreams: []
+      };
+
+      // DOM element references
+      const els = {
+        log: document.getElementById("log"),
+        chatForm: document.getElementById("chat-form"),
+        promptInput: document.getElementById("prompt-input"),
+        sendBtn: document.getElementById("b"),
+        netBadge: document.getElementById("net-badge"),
+        activeAccountLabel: document.getElementById("active-account-label"),
+        toastBanner: document.getElementById("toast-banner"),
+        toastMessage: document.getElementById("toast-message"),
+        toastClose: document.getElementById("toast-close"),
+        wakeStatusText: document.getElementById("wake-status-text"),
+        simWakeBtn: document.getElementById("sim-wake-btn"),
+
+        // Settings
+        settingsBackdrop: document.getElementById("settings-backdrop"),
+        openSettingsBtn: document.getElementById("open-settings-btn"),
+        closeSettingsBtn: document.getElementById("close-settings-btn"),
+        tabLogin: document.getElementById("tab-login"),
+        tabSignup: document.getElementById("tab-signup"),
+        signupNameRow: document.getElementById("signup-name-row"),
+        authForm: document.getElementById("auth-form"),
+        authName: document.getElementById("auth-name"),
+        authEmail: document.getElementById("auth-email"),
+        authPassword: document.getElementById("auth-password"),
+        authSubmitBtn: document.getElementById("auth-submit-btn"),
+        logoutBtn: document.getElementById("logout-btn"),
+        emailChips: document.getElementById("email-chips"),
+
+        // First-time setup
+        setupStatusBadge: document.getElementById("setup-status-badge"),
+        setupUserName: document.getElementById("setup-user-name"),
+        setupPersonality: document.getElementById("setup-personality"),
+        setupTheme: document.getElementById("setup-theme"),
+        setupMemoryNotes: document.getElementById("setup-memory-notes"),
+        saveSetupBtn: document.getElementById("save-setup-btn"),
+
+        // PWA
+        installPwaBtn: document.getElementById("install-pwa-btn"),
+        downloadManifestLink: document.getElementById("download-manifest-link"),
+        pwaStateBadge: document.getElementById("pwa-state-badge"),
+
+        // Permissions
+        permMicStatus: document.getElementById("perm-mic-status"),
+        reqMicBtn: document.getElementById("req-mic-btn"),
+        permCamStatus: document.getElementById("perm-cam-status"),
+        reqCamBtn: document.getElementById("req-cam-btn"),
+        permScreenStatus: document.getElementById("perm-screen-status"),
+        reqScreenBtn: document.getElementById("req-screen-btn"),
+        wakeToggleInput: document.getElementById("wake-toggle-input"),
+        permWakeStatus: document.getElementById("perm-wake-status"),
+        subtitlePrefInput: document.getElementById("subtitle-pref-input"),
+        clearChatBtn: document.getElementById("clear-chat-btn"),
+
+        // Live HUD
+        live: document.getElementById("live"),
+        openLiveBtn: document.getElementById("open-live-btn"),
+        closeLiveBtn: document.getElementById("close-live-btn"),
+        liveWaveStage: document.getElementById("live-wave-stage"),
+        liveModeStatus: document.getElementById("live-mode-status"),
+        liveNetworkPill: document.getElementById("live-network-pill"),
+        liveDeviceEyePill: document.getElementById("live-device-eye-pill"),
+        deviceContextSummary: document.getElementById("device-context-summary"),
+        refreshDeviceScanBtn: document.getElementById("refresh-device-scan-btn"),
+        liveSubtitleBox: document.getElementById("live-subtitle-box"),
+        liveSubtitleText: document.getElementById("live-subtitle-text"),
+        toggleSubtitleBtn: document.getElementById("toggle-subtitle-btn"),
+        liveSpeakPromptBtn: document.getElementById("live-speak-prompt-btn"),
+        liveListenMicBtn: document.getElementById("live-listen-mic-btn")
+      };
+
+      /**
+       * Show non-blocking notification banner instead of alert/confirm.
+       */
+      function showToast(message, type) {
+        try {
+          if (!els.toastBanner || !els.toastMessage) return;
+          els.toastMessage.textContent = message;
+          els.toastBanner.className = "mx-3 mt-2 px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-medium border flex items-center justify-between gap-2 shrink-0";
+          if (type === "error") {
+            els.toastBanner.classList.add("bg-rose-500/15", "text-rose-400", "border-rose-500/35");
+          } else if (type === "success") {
+            els.toastBanner.classList.add("bg-emerald-500/15", "text-emerald-400", "border-emerald-500/35");
+          } else {
+            els.toastBanner.classList.add("bg-sky-500/15", "text-sky-400", "border-sky-500/35");
+          }
+        } catch (err) {
+          console.error("Toast error:", err);
+        }
+      }
+
+      function hideToast() {
+        if (els.toastBanner) {
+          els.toastBanner.classList.add("hidden");
+        }
+      }
+
+      /**
+       * Create default profile structure for a given email.
+       */
+      function createDefaultAccount(email, name) {
+        const cleanEmail = String(email || "guest@arjun.ai").trim().toLowerCase();
+        const fallbackName = name && name.trim() ? name.trim() : cleanEmail.split("@")[0] || "Friend";
+        return {
+          email: cleanEmail,
+          name: fallbackName,
+          setupCompleted: false,
+          settings: {
+            userName: fallbackName,
+            personality: "friendly",
+            theme: "system",
+            memoryNotes: "",
+            wakeEnabled: true,
+            subtitlesEnabled: true
+          },
+          permissions: {
+            microphone: "prompt",
+            camera: "prompt",
+            wholeDevice: true
+          },
+          messages: [
+            {
+              role: "assistant",
+              text: `Namaste ${fallbackName}! I am Arjun. Your memory is linked to ${cleanEmail}, so whenever you sign in with this email again, our conversation and notes stay right here. Say "chat wake up", "chat", "hello arjun", or "arjun" anytime to launch Live Talking.`,
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            }
+          ]
+        };
+      }
+
+      /**
+       * Load accounts and active email from localStorage safely.
+       */
+      function loadStorageState() {
+        try {
+          const rawAccounts = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+          state.accounts = rawAccounts ? JSON.parse(rawAccounts) : {};
+          if (!state.accounts || typeof state.accounts !== "object") {
+            state.accounts = {};
+          }
+
+          const savedEmail = localStorage.getItem(STORAGE_KEYS.ACTIVE_EMAIL);
+          if (savedEmail && state.accounts[savedEmail]) {
+            state.activeEmail = savedEmail;
+          } else {
+            const guestEmail = "guest@arjun.ai";
+            if (!state.accounts[guestEmail]) {
+              state.accounts[guestEmail] = createDefaultAccount(guestEmail, "Guest");
+            }
+            state.activeEmail = guestEmail;
+          }
+          persistAll();
+        } catch (err) {
+          console.error("Failed to load localStorage state:", err);
+          const fallback = createDefaultAccount("guest@arjun.ai", "Guest");
+          state.accounts = { "guest@arjun.ai": fallback };
+          state.activeEmail = "guest@arjun.ai";
+        }
+      }
+
+      function persistAll() {
+        try {
+          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(state.accounts));
+          if (state.activeEmail) {
+            localStorage.setItem(STORAGE_KEYS.ACTIVE_EMAIL, state.activeEmail);
+          }
+        } catch (err) {
+          console.error("Failed to save localStorage state:", err);
+          showToast("Storage limit reached; some data may not persist.", "error");
+        }
+      }
+
+      function getCurrentAccount() {
+        if (!state.activeEmail || !state.accounts[state.activeEmail]) {
+          state.activeEmail = "guest@arjun.ai";
+          if (!state.accounts[state.activeEmail]) {
+            state.accounts[state.activeEmail] = createDefaultAccount(state.activeEmail, "Guest");
+          }
+        }
+        return state.accounts[state.activeEmail];
+      }
+
+      /**
+       * Apply theme preference (system | dark | light).
+       */
+      function applyTheme(theme) {
+        try {
+          const root = document.documentElement;
+          root.classList.remove("theme-light", "theme-dark");
+          if (theme === "light") {
+            root.classList.add("theme-light");
+          } else if (theme === "dark") {
+            root.classList.add("theme-dark");
+          }
+        } catch (err) {
+          console.error("Theme error:", err);
+        }
+      }
+
+      /**
+       * Render conversation messages into #log and scroll to bottom.
+       */
+      function renderMessages() {
+        try {
+          const acc = getCurrentAccount();
+          els.log.innerHTML = "";
+
+          (acc.messages || []).forEach((msg) => {
+            const bubble = document.createElement("div");
+            const roleClass = msg.role === "user" ? "u" : msg.role === "error" ? "err" : "a";
+            bubble.className = `m ${roleClass}`;
+            bubble.textContent = msg.text;
+
+            if (msg.timestamp) {
+              const meta = document.createElement("span");
+              meta.className = "m-meta";
+              meta.textContent = `${msg.role === "user" ? (acc.settings.userName || "You") : msg.role === "error" ? "System Notice" : "Arjun"} • ${msg.timestamp}`;
+              bubble.appendChild(meta);
+            }
+
+            els.log.appendChild(bubble);
+          });
+
+          els.log.scrollTop = els.log.scrollHeight;
+        } catch (err) {
+          console.error("Render messages failed:", err);
+        }
+      }
+
+      function appendMessage(role, text) {
+        const acc = getCurrentAccount();
+        const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        acc.messages.push({ role, text, timestamp: now });
+        persistAll();
+        renderMessages();
+      }
+
+      /**
+       * Sync Settings UI controls with active account state.
+       */
+      function syncSettingsUI() {
+        try {
+          const acc = getCurrentAccount();
+          const s = acc.settings;
+
+          els.activeAccountLabel.textContent = `${acc.email} • ${acc.messages.length} msgs in memory`;
+          els.setupUserName.value = s.userName || acc.name || "";
+          els.setupPersonality.value = s.personality || "friendly";
+          els.setupTheme.value = s.theme || "system";
+          els.setupMemoryNotes.value = s.memoryNotes || "";
+          els.wakeToggleInput.checked = Boolean(s.wakeEnabled);
+          els.subtitlePrefInput.checked = Boolean(s.subtitlesEnabled);
+
+          state.subtitlesVisible = Boolean(s.subtitlesEnabled);
+          updateSubtitleButtonUI();
+
+          if (acc.setupCompleted) {
+            els.setupStatusBadge.textContent = "Setup Saved";
+            els.setupStatusBadge.className = "text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium";
+          } else {
+            els.setupStatusBadge.textContent = "First-Time Setup";
+            els.setupStatusBadge.className = "text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-medium";
+          }
+
+          els.permMicStatus.textContent =
+            acc.permissions.microphone === "granted"
+              ? "Granted • Voice ready"
+              : acc.permissions.microphone === "denied"
+              ? "Blocked or declined in browser"
+              : "Tap Allow Voice to grant";
+
+          els.permCamStatus.textContent =
+            acc.permissions.camera === "granted"
+              ? "Granted • Camera ready"
+              : acc.permissions.camera === "denied"
+              ? "Blocked or declined in browser"
+              : "Tap Allow Camera to grant";
+
+          els.permScreenStatus.textContent = acc.permissions.wholeDevice
+            ? "Enabled • Arjun can inspect full device view"
+            : "Disabled";
+
+          // Saved email quick-switch chips
+          els.emailChips.innerHTML = "";
+          Object.keys(state.accounts).forEach((emailKey) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            const isCurrent = emailKey === state.activeEmail;
+            chip.className = `px-2.5 py-1 rounded-full text-[11px] font-medium border transition ${
+              isCurrent
+                ? "bg-sky-600 text-white border-sky-500"
+                : "bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border-subtle)] hover:border-sky-500"
+            }`;
+            const count = (state.accounts[emailKey].messages || []).length;
+            chip.textContent = `${emailKey} (${count})`;
+            chip.addEventListener("click", () => {
+              state.activeEmail = emailKey;
+              persistAll();
+              applyTheme(getCurrentAccount().settings.theme);
+              syncSettingsUI();
+              renderMessages();
+              showToast(`Switched to ${emailKey} — memory restored.`, "success");
+            });
+            els.emailChips.appendChild(chip);
+          });
+        } catch (err) {
+          console.error("Sync settings UI error:", err);
+        }
+      }
+
+      /**
+       * Generate contextual AI response from Arjun using email memory & device context.
+       */
+      function generateArjunReply(userPrompt, options) {
+        const acc = getCurrentAccount();
+        const userName = acc.settings.userName || acc.name || "there";
+        const style = acc.settings.personality || "friendly";
+        const notes = (acc.settings.memoryNotes || "").trim();
+        const isLive = Boolean(options && options.live);
+        const deviceInfo = collectDeviceContext();
+
+        const lower = userPrompt.toLowerCase();
+        let reply = "";
+
+        if (lower.includes("remember") || lower.includes("memory")) {
+          reply = notes
+            ? `${userName}, for ${acc.email}, I currently remember: "${notes}". We have ${acc.messages.length} messages saved in this email thread.`
+            : `${userName}, your account ${acc.email} currently has ${acc.messages.length} saved messages. Add core facts in Settings → First-Time Web Setup anytime!`;
+        } else if (lower.includes("device") || lower.includes("screen") || lower.includes("see")) {
+          reply = `I can see your whole device view (${deviceInfo.viewport}, ${deviceInfo.online ? "online" : "offline"}, active account ${acc.email}). ${
+            notes ? `I'm also keeping your saved note in mind: "${notes}".` : "How can I help with what's on your screen?"
+          }`;
+        } else {
+          if (style === "concise") {
+            reply = `[${userName}] Got it: "${userPrompt}". ${notes ? `Note: ${notes}. ` : ""}Ready for your next command.`;
+          } else if (style === "mentor") {
+            reply = `Let's break that down thoughtfully, ${userName}. Regarding "${userPrompt}"—building step by step keeps things clear and reliable. ${
+              notes ? `Keeping your focus (${notes}) in mind, ` : ""
+            }what would you like to tackle next?`;
+          } else {
+            reply = `Hey ${userName}! I heard you on "${userPrompt}". ${
+              notes ? `Since I remember "${notes}" for ${acc.email}, ` : ""
+            }${isLive ? "I'm right here with you in Live mode—keep talking whenever you're ready." : "How else can I assist you today?"}`;
+          }
+        }
+
+        return reply;
+      }
+
+      /**
+       * Handle sending a prompt from chat or live mode inside try/catch/finally.
+       */
+      async function handleSendPrompt(rawText, options) {
+        const text = String(rawText || "").trim();
+        if (!text) return;
+
+        const opts = options || {};
+        els.sendBtn.disabled = true;
+
+        try {
+          if (text.toLowerCase().includes("trigger error test")) {
+            throw new Error("Simulated network interruption while contacting Arjun.");
+          }
+
+          appendMessage("user", text);
+
+          // Simulate brief processing delay
+          await new Promise((resolve) => setTimeout(resolve, 260));
+
+          const reply = generateArjunReply(text, opts);
+          appendMessage("assistant", reply);
+
+          if (state.liveOpen) {
+            setLiveSubtitle(reply);
+            triggerLiveTalkingWave(3400);
+          }
+        } catch (err) {
+          console.error("Chat error:", err);
+          const errText = err && err.message ? err.message : "Something went wrong while sending your message.";
+          appendMessage("error", errText);
+          if (state.liveOpen) {
+            setLiveSubtitle(errText);
+          }
+          showToast(errText, "error");
+        } finally {
+          els.sendBtn.disabled = false;
+          if (!opts.keepInput) {
+            els.promptInput.value = "";
+            autoResizeTextarea();
+          }
+        }
+      }
+
+      function autoResizeTextarea() {
+        els.promptInput.style.height = "auto";
+        els.promptInput.style.height = `${Math.min(els.promptInput.scrollHeight, 120)}px`;
+      }
+
+      /**
+       * Check if transcript contains any wake phrase:
+       * "chat wake up", "chat", "hello arjun", "arjun"
+       */
+      function containsWakePhrase(transcript) {
+        const clean = String(transcript || "").toLowerCase().trim();
+        if (!clean) return false;
+        return WAKE_PHRASES.some((phrase) => {
+          if (phrase === "chat" || phrase === "arjun") {
+            const regex = new RegExp(`\\b${phrase}\\b`, "i");
+            return regex.test(clean);
+          }
+          return clean.includes(phrase);
+        });
+      }
+
+      function handleWakeTrigger(phraseDetected) {
+        if (!navigator.onLine) {
+          showToast("Device is offline. Connect to a network to wake Arjun hands-free.", "error");
+          return;
+        }
+        const acc = getCurrentAccount();
+        const name = acc.settings.userName || acc.name || "there";
+        openLiveMode(`Wake word "${phraseDetected}" detected! Hi ${name}, I'm live and seeing your whole device.`);
+      }
+
+      /**
+       * Collect whole-device context safely for Arjun's device awareness.
+       */
+      function collectDeviceContext() {
+        const acc = getCurrentAccount();
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const isStandalone =
+          window.matchMedia("(display-mode: standalone)").matches || Boolean(window.navigator.standalone);
+        return {
+          online: navigator.onLine,
+          viewport: `${w}×${h}`,
+          mode: isStandalone ? "Installed Web App" : "Browser Web App",
+          email: acc.email,
+          messageCount: acc.messages.length
+        };
+      }
+
+      function updateDeviceContextCard() {
+        try {
+          const info = collectDeviceContext();
+          const acc = getCurrentAccount();
+          const notePart = acc.settings.memoryNotes ? ` Memory note: "${acc.settings.memoryNotes}".` : "";
+          els.deviceContextSummary.textContent = `Full device view (${info.mode}, ${info.viewport}): ${
+            info.online ? "Network connected" : "Offline"
+          }, account ${info.email}, ${info.messageCount} saved messages.${notePart}`;
+        } catch (err) {
+          console.error("Device context update failed:", err);
+        }
+      }
+
+      /**
+       * Live Talking HUD (#live) controls
+       */
+      function setLiveSubtitle(text) {
+        els.liveSubtitleText.textContent = text;
+      }
+
+      function updateSubtitleButtonUI() {
+        els.liveSubtitleBox.style.display = state.subtitlesVisible ? "block" : "none";
+        els.toggleSubtitleBtn.textContent = state.subtitlesVisible ? "Subtitles: ON" : "Subtitles: OFF";
+        els.toggleSubtitleBtn.setAttribute("aria-pressed", String(state.subtitlesVisible));
+      }
+
+      let waveTimer = null;
+      function triggerLiveTalkingWave(durationMs) {
+        state.liveTalking = true;
+        els.liveWaveStage.classList.remove("live-listening");
+        els.liveWaveStage.classList.add("live-talking");
+        els.liveModeStatus.textContent = "Talking • Seeing Whole Device";
+
+        if (waveTimer) clearTimeout(waveTimer);
+        waveTimer = setTimeout(() => {
+          if (!state.liveOpen) return;
+          state.liveTalking = false;
+          els.liveWaveStage.classList.remove("live-talking");
+          els.liveWaveStage.classList.add("live-listening");
+          els.liveModeStatus.textContent = "Listening • Say a wake phrase or tap below";
+        }, durationMs || 3200);
+      }
+
+      function openLiveMode(initialSubtitle) {
+        try {
+          state.liveOpen = true;
+          els.live.classList.add("active");
+          els.live.setAttribute("aria-hidden", "false");
+          updateNetworkStatusUI();
+          updateDeviceContextCard();
+          updateSubtitleButtonUI();
+
+          const acc = getCurrentAccount();
+          const name = acc.settings.userName || acc.name || "there";
+          setLiveSubtitle(
+            initialSubtitle ||
+              `Hi ${name}, I'm Arjun! I can see your whole device view and keep your ${acc.email} memory active.`
+          );
+          triggerLiveTalkingWave(3600);
+        } catch (err) {
+          console.error("Failed to open Live mode:", err);
+          showToast("Could not open Live Talking screen.", "error");
+        }
+      }
+
+      function closeLiveMode() {
+        state.liveOpen = false;
+        els.live.classList.remove("active");
+        els.live.setAttribute("aria-hidden", "true");
+        if (waveTimer) clearTimeout(waveTimer);
+      }
+
+      /**
+       * Setup dynamic Web App Manifest blob & install prompt handling.
+       */
+      function setupDownloadableWebApp() {
+        try {
+          const manifestObj = {
+            name: "Arjun AI Assistant",
+            short_name: "Arjun AI",
+            description: "Personal AI assistant with email-synced memory, wake word live talking, and device view.",
+            start_url: "./",
+            display: "standalone",
+            background_color: "#090d16",
+            theme_color: "#0f172a",
+            icons: [
+              {
+                src: "https://placehold.co/192x192/0f172a/38bdf8?text=A",
+                sizes: "192x192",
+                type: "image/png"
+              },
+              {
+                src: "https://placehold.co/512x512/0f172a/818cf8?text=ARJUN",
+                sizes: "512x512",
+                type: "image/png"
+              }
+            ]
+          };
+
+          const blob = new Blob([JSON.stringify(manifestObj, null, 2)], {
+            type: "application/manifest+json"
+          });
+          const manifestUrl = URL.createObjectURL(blob);
+
+          const linkTag = document.createElement("link");
+          linkTag.rel = "manifest";
+          linkTag.href = manifestUrl;
+          document.head.appendChild(linkTag);
+
+          els.downloadManifestLink.href = manifestUrl;
+
+          if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone) {
+            els.pwaStateBadge.textContent = "Installed Web App";
+            els.installPwaBtn.textContent = "Web App Installed";
+          }
+        } catch (err) {
+          console.error("Manifest setup error:", err);
+        }
+      }
+
+      /**
+       * Request real browser media permissions with clean fallback feedback.
+       */
+      async function requestMicrophonePermission() {
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            getCurrentAccount().permissions.microphone = "granted";
+            persistAll();
+            syncSettingsUI();
+            showToast("Voice mode enabled in simulated browser environment.", "success");
+            return;
+          }
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((t) => t.stop());
+          getCurrentAccount().permissions.microphone = "granted";
+          persistAll();
+          syncSettingsUI();
+          showToast("Microphone permission granted for voice & wake words.", "success");
+        } catch (err) {
+          console.warn("Mic permission fallback:", err);
+          getCurrentAccount().permissions.microphone = "denied";
+          persistAll();
+          syncSettingsUI();
+          showToast("Microphone access was blocked or unavailable; fallback mode active.", "error");
+        }
+      }
+
+      async function requestCameraPermission() {
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            getCurrentAccount().permissions.camera = "granted";
+            persistAll();
+            syncSettingsUI();
+            showToast("Camera permission recorded for web app session.", "success");
+            return;
+          }
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach((t) => t.stop());
+          getCurrentAccount().permissions.camera = "granted";
+          persistAll();
+          syncSettingsUI();
+          showToast("Camera permission granted.", "success");
+        } catch (err) {
+          console.warn("Cam permission fallback:", err);
+          getCurrentAccount().permissions.camera = "denied";
+          persistAll();
+          syncSettingsUI();
+          showToast("Camera access was blocked or unavailable; fallback mode active.", "error");
+        }
+      }
+
+      async function requestWholeDevicePermission() {
+        try {
+          if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === "function") {
+            try {
+              const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+              displayStream.getTracks().forEach((t) => t.stop());
+              showToast("Screen capture permission granted — Arjun can inspect your display.", "success");
+            } catch (screenErr) {
+              // Graceful fallback so users on mobile/sandboxed iframes still get full device context
+              showToast("Whole-device context enabled (viewport, account memory & app state).", "info");
+            }
+          } else {
+            showToast("Whole-device context enabled.", "info");
+          }
+
+          getCurrentAccount().permissions.wholeDevice = true;
+          persistAll();
+          syncSettingsUI();
+          updateDeviceContextCard();
+        } catch (err) {
+          console.error("Whole device permission error:", err);
+          showToast("Could not update device view permission.", "error");
+        }
+      }
+
+      /**
+       * Optional Web Speech API wake word listener when online & enabled.
+       */
+      function initSpeechWakeListener() {
+        try {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SpeechRecognition) {
+            els.wakeStatusText.textContent =
+              'Wake phrases: "chat wake up", "chat", "hello arjun", "arjun" (use button or type to test)';
+            return;
+          }
+
+          const rec = new SpeechRecognition();
+          rec.continuous = true;
+          rec.interimResults = false;
+          rec.lang = "en-US";
+
+          rec.onresult = (event) => {
+            const acc = getCurrentAccount();
+            if (!acc.settings.wakeEnabled || !navigator.onLine) return;
+            const lastIdx = event.results.length - 1;
+            const transcript = event.results[lastIdx][0].transcript || "";
+            if (containsWakePhrase(transcript)) {
+              const matched =
+                WAKE_PHRASES.find((p) => transcript.toLowerCase().includes(p)) || transcript.trim();
+              handleWakeTrigger(matched);
+            } else if (state.liveOpen) {
+              handleSendPrompt(transcript, { live: true });
+            }
+          };
+
+          rec.onerror = () => {
+            // Silently ignore speech engine errors in background
+          };
+
+          rec.onend = () => {
+            const acc = getCurrentAccount();
+            if (acc.settings.wakeEnabled && navigator.onLine) {
+              try {
+                rec.start();
+              } catch (_) {
+                // Already started or blocked without gesture
+              }
+            }
+          };
+
+          state.speechRecognition = rec;
+        } catch (err) {
+          console.warn("SpeechRecognition unavailable:", err);
+        }
+      }
+
+      function updateNetworkStatusUI() {
+        const online = navigator.onLine;
+        if (online) {
+          els.netBadge.className =
+            "inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-medium";
+          els.netBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Online';
+          els.liveNetworkPill.textContent = "Network Connected";
+          els.liveNetworkPill.className =
+            "px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-400/30";
+        } else {
+          els.netBadge.className =
+            "inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-medium";
+          els.netBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>Offline';
+          els.liveNetworkPill.textContent = "Offline — Connect for Wake";
+          els.liveNetworkPill.className =
+            "px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-400/30";
+        }
+        updateDeviceContextCard();
+      }
+
+      function openSettings() {
+        syncSettingsUI();
+        els.settingsBackdrop.classList.add("open");
+        els.settingsBackdrop.setAttribute("aria-hidden", "false");
+      }
+
+      function closeSettings() {
+        els.settingsBackdrop.classList.remove("open");
+        els.settingsBackdrop.setAttribute("aria-hidden", "true");
+      }
+
+      /**
+       * Wire up all event listeners cleanly.
+       */
+      function bindEvents() {
+        // Toast dismiss
+        els.toastClose.addEventListener("click", hideToast);
+
+        // Composer auto-resize & Enter-to-send
+        els.promptInput.addEventListener("input", autoResizeTextarea);
+        els.promptInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            els.chatForm.dispatchEvent(new Event("submit"));
+          }
+        });
+
+        // Submit chat prompt (also checks wake phrases if user types them)
+        els.chatForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const val = els.promptInput.value.trim();
+          if (!val) return;
+
+          const acc = getCurrentAccount();
+          if (acc.settings.wakeEnabled && containsWakePhrase(val) && val.length <= 24) {
+            els.promptInput.value = "";
+            autoResizeTextarea();
+            handleWakeTrigger(val);
+            return;
+          }
+
+          await handleSendPrompt(val);
+        });
+
+        // Quick wake phrase simulator button
+        els.simWakeBtn.addEventListener("click", () => {
+          handleWakeTrigger("hello arjun");
+        });
+
+        // Open / Close Settings
+        els.openSettingsBtn.addEventListener("click", openSettings);
+        els.closeSettingsBtn.addEventListener("click", closeSettings);
+        els.settingsBackdrop.addEventListener("click", (e) => {
+          if (e.target === els.settingsBackdrop) {
+            closeSettings();
+          }
+        });
+
+        // Login vs Create Account tabs
+        els.tabLogin.addEventListener("click", () => {
+          state.authMode = "login";
+          els.signupNameRow.classList.add("hidden");
+          els.authSubmitBtn.textContent = "Log In & Restore Memory";
+          els.tabLogin.className = "py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition";
+          els.tabSignup.className = "py-1.5 rounded-lg text-xs font-semibold text-[var(--text-muted)] transition";
+        });
+
+        els.tabSignup.addEventListener("click", () => {
+          state.authMode = "signup";
+          els.signupNameRow.classList.remove("hidden");
+          els.authSubmitBtn.textContent = "Create Account & Memory";
+          els.tabSignup.className = "py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition";
+          els.tabLogin.className = "py-1.5 rounded-lg text-xs font-semibold text-[var(--text-muted)] transition";
+        });
+
+        // Auth form submit (Create Account or Log In with same email -> same memory)
+        els.authForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          try {
+            const email = (els.authEmail.value || "").trim().toLowerCase();
+            const password = els.authPassword.value || "";
+            const nameInput = (els.authName.value || "").trim();
+
+            if (!email || !email.includes("@")) {
+              showToast("Please enter a valid email address.", "error");
+              return;
+            }
+            if (!password) {
+              showToast("Please enter a password or passcode.", "error");
+              return;
+            }
+
+            if (state.authMode === "signup") {
+              if (!state.accounts[email]) {
+                state.accounts[email] = createDefaultAccount(email, nameInput || email.split("@")[0]);
+                showToast(`Account created for ${email}. Persistent memory initialized.`, "success");
+              } else {
+                if (nameInput) {
+                  state.accounts[email].name = nameInput;
+                  state.accounts[email].settings.userName = nameInput;
+                }
+                showToast(`Welcome back ${email}! Restored your existing memory.`, "success");
+              }
+            } else {
+              if (!state.accounts[email]) {
+                state.accounts[email] = createDefaultAccount(email, email.split("@")[0]);
+                showToast(`Signed in with ${email} and started a new memory profile.`, "info");
+              } else {
+                showToast(`Logged in as ${email} — restored ${state.accounts[email].messages.length} messages.`, "success");
+              }
+            }
+
+            state.activeEmail = email;
+            persistAll();
+            applyTheme(getCurrentAccount().settings.theme);
+            syncSettingsUI();
+            renderMessages();
+            els.authPassword.value = "";
+          } catch (err) {
+            console.error("Auth submit error:", err);
+            showToast("Could not complete account action.", "error");
+          }
+        });
+
+        // Sign out back to guest session
+        els.logoutBtn.addEventListener("click", () => {
+          const guestEmail = "guest@arjun.ai";
+          if (!state.accounts[guestEmail]) {
+            state.accounts[guestEmail] = createDefaultAccount(guestEmail, "Guest");
+          }
+          state.activeEmail = guestEmail;
+          persistAll();
+          applyTheme(getCurrentAccount().settings.theme);
+          syncSettingsUI();
+          renderMessages();
+          showToast("Signed out to Guest session. Your email memory stays safely saved.", "info");
+        });
+
+        // First-time setup save button inside Web Settings
+        els.saveSetupBtn.addEventListener("click", () => {
+          try {
+            const acc = getCurrentAccount();
+            const newName = (els.setupUserName.value || "").trim() || acc.name || "Friend";
+            acc.name = newName;
+            acc.settings.userName = newName;
+            acc.settings.personality = els.setupPersonality.value;
+            acc.settings.theme = els.setupTheme.value;
+            acc.settings.memoryNotes = (els.setupMemoryNotes.value || "").trim();
+            acc.setupCompleted = true;
+
+            persistAll();
+            applyTheme(acc.settings.theme);
+            syncSettingsUI();
+            updateDeviceContextCard();
+            showToast(`Setup saved for ${acc.email}!`, "success");
+          } catch (err) {
+            console.error("Save setup error:", err);
+            showToast("Error saving setup preferences.", "error");
+          }
+        });
+
+        // Install PWA prompt button
+        window.addEventListener("beforeinstallprompt", (e) => {
+          e.preventDefault();
+          state.deferredInstallPrompt = e;
+          els.pwaStateBadge.textContent = "Install Available";
+          showToast("Arjun AI Web App is ready to install!", "info");
+        });
+
+        els.installPwaBtn.addEventListener("click", async () => {
+          try {
+            if (state.deferredInstallPrompt) {
+              state.deferredInstallPrompt.prompt();
+              const choice = await state.deferredInstallPrompt.userChoice;
+              if (choice && choice.outcome === "accepted") {
+                showToast("Arjun AI Web App installed!", "success");
+                els.pwaStateBadge.textContent = "Installed Web App";
+              } else {
+                showToast("Installation dismissed.", "info");
+              }
+              state.deferredInstallPrompt = null;
+            } else {
+              showToast(
+                'Use your browser menu ("Add to Home Screen" / "Install App") or download the manifest to install.',
+                "info"
+              );
+            }
+          } catch (err) {
+            console.error("PWA install error:", err);
+            showToast("Install prompt unavailable in this browser view.", "info");
+          }
+        });
+
+        // Permissions buttons & toggles
+        els.reqMicBtn.addEventListener("click", requestMicrophonePermission);
+        els.reqCamBtn.addEventListener("click", requestCameraPermission);
+        els.reqScreenBtn.addEventListener("click", requestWholeDevicePermission);
+
+        els.wakeToggleInput.addEventListener("change", () => {
+          const acc = getCurrentAccount();
+          acc.settings.wakeEnabled = els.wakeToggleInput.checked;
+          persistAll();
+          if (acc.settings.wakeEnabled && state.speechRecognition && navigator.onLine) {
+            try {
+              state.speechRecognition.start();
+            } catch (_) {}
+          } else if (!acc.settings.wakeEnabled && state.speechRecognition) {
+            try {
+              state.speechRecognition.stop();
+            } catch (_) {}
+          }
+          showToast(
+            acc.settings.wakeEnabled
+              ? "Network wake listener enabled for Arjun."
+              : "Network wake listener paused.",
+            "info"
+          );
+        });
+
+        els.subtitlePrefInput.addEventListener("change", () => {
+          const acc = getCurrentAccount();
+          acc.settings.subtitlesEnabled = els.subtitlePrefInput.checked;
+          state.subtitlesVisible = els.subtitlePrefInput.checked;
+          persistAll();
+          updateSubtitleButtonUI();
+        });
+
+        els.clearChatBtn.addEventListener("click", () => {
+          const acc = getCurrentAccount();
+          acc.messages = [
+            {
+              role: "assistant",
+              text: `Chat cleared for ${acc.email}. Your profile & core memory notes are still intact.`,
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            }
+          ];
+          persistAll();
+          renderMessages();
+          syncSettingsUI();
+          showToast("Cleared current email conversation.", "info");
+        });
+
+        // Live Talking HUD controls
+        els.openLiveBtn.addEventListener("click", () => openLiveMode());
+        els.closeLiveBtn.addEventListener("click", closeLiveMode);
+
+        els.toggleSubtitleBtn.addEventListener("click", () => {
+          state.subtitlesVisible = !state.subtitlesVisible;
+          const acc = getCurrentAccount();
+          acc.settings.subtitlesEnabled = state.subtitlesVisible;
+          els.subtitlePrefInput.checked = state.subtitlesVisible;
+          persistAll();
+          updateSubtitleButtonUI();
+        });
+
+        els.refreshDeviceScanBtn.addEventListener("click", () => {
+          updateDeviceContextCard();
+          setLiveSubtitle("Scanned your full device state: screen layout, network link, and active memory.");
+          triggerLiveTalkingWave(2600);
+        });
+
+        els.liveSpeakPromptBtn.addEventListener("click", () => {
+          handleSendPrompt("Tell me what you see on my whole device right now.", { live: true, keepInput: true });
+        });
+
+        els.liveListenMicBtn.addEventListener("click", async () => {
+          if (getCurrentAccount().permissions.microphone !== "granted") {
+            await requestMicrophonePermission();
+          }
+          triggerLiveTalkingWave(3200);
+          setLiveSubtitle("Listening to your voice turn...");
+          setTimeout(() => {
+            if (state.liveOpen) {
+              handleSendPrompt("Hello Arjun, I'm speaking with you live.", { live: true, keepInput: true });
+            }
+          }, 900);
+        });
+
+        // Online / Offline & Resize events
+        window.addEventListener("online", () => {
+          updateNetworkStatusUI();
+          showToast("Network connected — Arjun wake phrases are active.", "success");
+          const acc = getCurrentAccount();
+          if (acc.settings.wakeEnabled && state.speechRecognition) {
+            try {
+              state.speechRecognition.start();
+            } catch (_) {}
+          }
+        });
+
+        window.addEventListener("offline", () => {
+          updateNetworkStatusUI();
+          showToast("Network disconnected.", "error");
+        });
+
+        window.addEventListener("resize", () => {
+          updateDeviceContextCard();
+        });
+      }
+
+      // Initialize app
+      window.addEventListener("DOMContentLoaded", () => {
+        loadStorageState();
+        const acc = getCurrentAccount();
+        applyTheme(acc.settings.theme);
+        setupDownloadableWebApp();
+        initSpeechWakeListener();
+        bindEvents();
+        syncSettingsUI();
+        updateNetworkStatusUI();
+        renderMessages();
+      });
+    })();
+  </script>
+</body>
+</html>
