@@ -134,6 +134,7 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 <div class="row"><button id="savekey" class="pri" type="button">Save key</button><button id="rmkey" type="button">Remove key</button></div>
 <label for="model">Chat model</label>
 <input id="model" type="text" autocomplete="off">
+<label for="srv">Server address (Render)</label><input id="srv" type="text" autocomplete="off" placeholder="https://your-service.onrender.com">
 <div class="note">The key stays only on this phone and is never shown again.</div>
 </details></section>
 <section><details id="voiceBox"><summary>Voice</summary>
@@ -382,25 +383,40 @@ function parseSSE(chunk, onDelta){
   });
   return out;
 }
+function srvBase(){ return (load("srv") || "").replace(/\/+$/, ""); }
+function chatBody(att, live){
+  var hist = recent();
+  return {
+    systemInstruction: {parts: [{text: CHARACTER.prompt + (live ? LIVE_RULE : TEXT_RULE) + memoryText()}]},
+    contents: hist.map(function(m, i){
+      var parts = [{text: m.text}];
+      if(att && i === hist.length - 1){
+        if(att.text != null){ parts = [{text: m.text + "\n\n[File: " + att.name + "]\n" + att.text}]; }
+        else { parts = [{inlineData: {mimeType: att.mime, data: att.data}}, {text: m.text}]; }
+      }
+      return {role: m.role, parts: parts};
+    }),
+    generationConfig: {maxOutputTokens: live ? 220 : 2048, temperature: 0.8}
+  };
+}
+async function askServer(srv, body, onDelta){
+  body.model = load("gmodel2") || DEFAULT_MODEL;
+  var r = await fetch(srv + "/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  var d = await r.json().catch(function(){ return null; });
+  if(!r.ok){ throw new Error((d && d.error && (d.error.message || d.error)) || "Server error " + r.status); }
+  var txt = ((d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || []).map(function(p){ return p.text || ""; }).join("");
+  if(!txt){ throw new Error("No answer came back. Try again."); }
+  onDelta(txt);
+  return txt;
+}
 async function askStream(att, onDelta){
   var live = liveOn;
+  var srv = srvBase();
+  if(srv){ return askServer(srv, chatBody(att, live), onDelta); }
   var res = await fetch(BASE + encodeURIComponent(load("gmodel2") || DEFAULT_MODEL) + ":streamGenerateContent?alt=sse", {
     method: "POST",
     headers: {"Content-Type": "application/json", "x-goog-api-key": load("gkey")},
-    body: JSON.stringify({
-      systemInstruction: {parts: [{text: CHARACTER.prompt + (live ? LIVE_RULE : TEXT_RULE) + memoryText()}]},
-      contents: (function(hist){
-        return hist.map(function(m, i){
-          var parts = [{text: m.text}];
-          if(att && i === hist.length - 1){
-            if(att.text != null){ parts = [{text: m.text + "\n\n[File: " + att.name + "]\n" + att.text}]; }
-            else { parts = [{inlineData: {mimeType: att.mime, data: att.data}}, {text: m.text}]; }
-          }
-          return {role: m.role, parts: parts};
-        });
-      })(recent()),
-      generationConfig: {maxOutputTokens: live ? 220 : 2048, temperature: 0.8}
-    })
+    body: JSON.stringify(chatBody(att, live))
   });
   if(!res.ok){
     var d = await res.json().catch(function(){ return null; });
@@ -423,8 +439,10 @@ async function askStream(att, onDelta){
 async function handle(text){
   text = (text || "").trim();
   if((!text && !pendingAtt) || busy){ return; }
-  if(!load("gkey")){ openSettings(true); return; }
+  if(!load("gkey") && !srvBase()){ openSettings(true); return; }
   if(!text){ text = "Sir, please look at this file and tell me what you see."; }
+  var imgM = text.match(/^(?:\/image\s+|draw\s+|generate (?:an? )?image of\s+|create (?:an? )?image of\s+)([\s\S]+)/i);
+  if(imgM && srvBase()){ return makePicture(text, imgM[1].trim()); }
   busy = true; $("b").disabled = true;
   var att = pendingAtt; pendingAtt = null; showAtt();
   stopSpeech();
@@ -486,6 +504,7 @@ function maskState(){
 function openSettings(api){
   maskState();
   $("model").value = load("gmodel2") || DEFAULT_MODEL;
+  $("srv").value = load("srv") || "";
   renderMemory();
   $("readaloud").checked = load("readaloud") === "1";
   $("apiBox").open = !!api || !load("gkey");
@@ -493,6 +512,7 @@ function openSettings(api){
 }
 $("done").onclick = function(){
   store("gmodel2", $("model").value.trim() || DEFAULT_MODEL);
+  store("srv", $("srv").value.trim() || null);
   $("settings").classList.remove("open");
   if(!msgs.length){ showHint(); }
 };
@@ -913,6 +933,31 @@ $("filePick").onchange = function(){
   };
   if(textLike){ r.readAsText(f); } else { r.readAsDataURL(f); }
 };
+
+async function makePicture(text, prompt){
+  if(!msgs.length){ $("log").innerHTML = ""; }
+  busy = true; $("b").disabled = true;
+  msgs.push({role: "user", text: text});
+  bubble("u", text);
+  var w = bubble("a", "Creating the picture, Sir…");
+  try{
+    var r = await fetch(srvBase() + "/image", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({prompt: prompt})});
+    var d = await r.json().catch(function(){ return null; });
+    if(!r.ok){ throw new Error((d && d.error) || "Image failed."); }
+    w.textContent = "";
+    var im = document.createElement("img");
+    im.src = "data:" + d.mimeType + ";base64," + d.data;
+    im.alt = prompt;
+    im.style.cssText = "max-width:100%;border-radius:12px;display:block";
+    w.appendChild(im);
+    msgs.push({role: "model", text: "[Picture created: " + prompt + "]"});
+    saveChat();
+  }catch(err){
+    w.textContent = "Problem: " + err.message;
+    msgs.pop();
+  }
+  busy = false; $("b").disabled = false;
+}
 
 function applySubs(){
   var on = load("subs") !== "off";
