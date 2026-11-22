@@ -79,7 +79,8 @@ const server = http.createServer(function(req, res){
         body: JSON.stringify({
           systemInstruction: body.systemInstruction,
           contents: body.contents,
-          generationConfig: body.generationConfig
+          generationConfig: body.generationConfig,
+          tools: body.tools
         })
       });
       const data = await r.json();
