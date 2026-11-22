@@ -175,11 +175,6 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 <form id="signForm" class="authf" hidden><input id="sName" type="text" placeholder="Name" autocomplete="name" required><input id="sEmail" type="email" placeholder="Email" autocomplete="email" required><input id="sPass" type="password" placeholder="Password (at least 6 characters)" autocomplete="new-password" minlength="6" required><button id="sBtn" class="pri" type="submit" disabled>Create account</button></form>
 <div class="dlbox"><button id="dlApp" type="button">Download the Arjun app</button><div class="note" id="dlNote"></div></div>
 <div class="note" id="lmsg">Checking sign-in…</div>
-<details id="setup"><summary>First-time setup</summary>
-<ol><li>Create a free project at console.firebase.google.com.</li><li>Build, then Authentication, then turn on the Email/Password sign-in provider.</li><li>Build, then Firestore Database, then create a database. Under Rules, allow each user to read and write only their own document: match /users/{uid} allow read, write if request.auth != null and request.auth.uid == uid.</li><li>In Authentication settings, add gedionwendemagegnw-lang.github.io under Authorized domains.</li><li>In Project settings, add a Web app, then paste its config here.</li></ol>
-<textarea id="fbcfg" rows="6" placeholder="Paste your Firebase config here"></textarea>
-<button id="fbsave" class="pri" type="button">Save setup</button>
-</details>
 </div>
 </div>
 
@@ -204,6 +199,15 @@ var CHARACTER = {
     "Style: warm, respectful, with light Indian-English touches such as 'Sir, right away!'.\n" +
     "Examples: asked your name, you say 'My name is Arjun, Sir.' Asked your age, you say 'I am twenty-five years old, Sir.'\n" +
     "Rules: stay in character as Arjun. Be honest, and if you do not know something, say so. If a request could cause harm, politely decline, still as Arjun."
+};
+var FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDkW8fM4q6OUvQDTh6D9qSadBM5YzUB_TQ",
+  authDomain: "arjun-514ff.firebaseapp.com",
+  projectId: "arjun-514ff",
+  storageBucket: "arjun-514ff.firebasestorage.app",
+  messagingSenderId: "122019839585",
+  appId: "1:122019839585:web:7dd88547fe3c8ff3917420",
+  measurementId: "G-7NH4PQ6FWM"
 };
 var LIVE_RULE = "\nRight now you are in a live voice conversation. Reply like a normal spoken conversation: 1 to 3 short, natural sentences, no lists, no markdown, no emojis.";
 var TEXT_RULE = "\nYou are in a text chat. Give complete, well-organized answers like any top AI assistant. Use plain text, and short lists or code blocks when useful.";
@@ -775,12 +779,7 @@ function loadScript(src){
 }
 async function initAuth(){
   var cfg = null;
-  try{ cfg = JSON.parse(load("fbconfig")); }catch(e){}
-  if(!cfg || !cfg.apiKey){
-    $("lmsg").textContent = "First, open First-time setup below and paste your Firebase config.";
-    $("setup").open = true;
-    return;
-  }
+  cfg = FIREBASE_CONFIG;
   try{
     await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
     await Promise.all([
@@ -873,12 +872,6 @@ function applySubs(){
 $("subBtn").onclick = function(){
   store("subs", load("subs") === "off" ? "on" : "off");
   applySubs();
-};
-$("fbsave").onclick = function(){
-  var c = parseCfg($("fbcfg").value);
-  if(!c.apiKey || !c.authDomain || !c.projectId){ $("lmsg").textContent = "That config is missing apiKey, authDomain or projectId."; return; }
-  store("fbconfig", JSON.stringify(c));
-  location.reload();
 };
 $("menu").onclick = openDrawer;
 $("scrim").onclick = closeDrawer;
