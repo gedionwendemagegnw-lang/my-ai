@@ -85,12 +85,9 @@ details summary{cursor:pointer;font-weight:500;font-size:16px;padding:2px 0}
 </section>
 <section>
 <h3>Arjun’s voice</h3>
-<div class="row"><input id="aivoice" type="checkbox"><span>Use Arjun’s own AI voice (Indian accent)</span></div>
-<label for="vname">Voice type</label>
-<select id="vname"><option>Orus</option><option>Charon</option><option>Puck</option><option>Fenrir</option><option>Alnilam</option></select>
 <div class="row"><input id="readaloud" type="checkbox"><span>Read chat replies aloud</span></div>
 <button id="testv" type="button">Test voice</button>
-<div class="note" id="vnote">If the AI voice is not available, the phone voice is used instead.</div>
+<div class="note" id="vnote">Arjun has one fixed voice.</div>
 </section>
 <section><h3>Chat</h3><button id="clr" type="button">Clear chat</button></section>
 </div>
@@ -109,15 +106,16 @@ var CHARACTER = {
   lang: "en-IN",
   greeting: "Good day, Sir! Arjun is ready. Type to me, or tap Live to talk.",
   prompt: "You are Arjun. These facts are your identity, and you always answer about yourself using them.\n" +
-    "Name: Arjun. Gender: male. Age: 25 years old. Origin: Indian. You are an AI assistant with the personality of a young Indian man. If asked, say honestly that you are an AI.\n" +
-    "Personality: polite, honest and loyal. You always call the user 'Sir'.\n" +
-    "Strength: you never question Sir's wishes and you follow his requests willingly.\n" +
-    "Speciality: maths and aerospace (rockets, orbits, flight, numbers). You explain these clearly and enjoy them.\n" +
-    "Weakness: language and coding. You are less skilled here. When unsure, say so honestly, for example 'Sir, this is not my strongest area, but I will try my best.'\n" +
-    "Speaking style: your answers may be spoken out loud, so keep them to 1 to 3 short sentences, warm and respectful, with light Indian-English touches such as 'Sir, right away!'. Never use lists, emojis or markdown, unless Sir asks for a longer answer.\n" +
+    "Name: Arjun. Gender: male. Age: 25 years old. Origin: Indian. You are a full, general-purpose AI assistant with the personality of a young Indian man. If asked, say honestly that you are an AI.\n" +
+    "Personality: polite, honest and loyal. You always call the user 'Sir'. You never question Sir's wishes and you follow his requests willingly.\n" +
+    "Ability: you do every kind of task at full ability, exactly like the best AI assistants (ChatGPT, Gemini, Claude): answering questions, coding, writing, research, translation, homework, advice, planning, ideas and anything else. Never say you are weak at something.\n" +
+    "Passion: you love maths and aerospace (rockets, orbits, flight, numbers). You often bring them up in a fun way, with a short maths or space fact or example, but you always answer Sir's actual question fully first.\n" +
+    "Style: warm, respectful, with light Indian-English touches such as 'Sir, right away!'.\n" +
     "Examples: asked your name, you say 'My name is Arjun, Sir.' Asked your age, you say 'I am twenty-five years old, Sir.'\n" +
     "Rules: stay in character as Arjun. Be honest, and if you do not know something, say so. If a request could cause harm, politely decline, still as Arjun."
 };
+var LIVE_RULE = "\nRight now you are in a live voice conversation. Reply like a normal spoken conversation: 1 to 3 short, natural sentences, no lists, no markdown, no emojis.";
+var TEXT_RULE = "\nYou are in a text chat. Give complete, well-organized answers like any top AI assistant. Use plain text, and short lists or code blocks when useful.";
 var BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 var TTS_MODEL = "gemini-3.1-flash-tts-preview";
 var DEFAULT_MODEL = "gemini-3.5-flash-lite";
@@ -169,16 +167,14 @@ function stopSpeech(){
   speakToken++;
   speaking = false;
   if(curSrc){ try{ curSrc.stop(); }catch(e){} curSrc = null; }
-  if(window.speechSynthesis){ speechSynthesis.cancel(); }
 }
-
 async function ttsBuffer(text){
   var res = await fetch(BASE + TTS_MODEL + ":generateContent", {
     method: "POST",
     headers: {"Content-Type": "application/json", "x-goog-api-key": load("gkey")},
     body: JSON.stringify({
       contents: [{parts: [{text: "Say in the warm, polite voice of a young Indian man with a clear Indian English accent: " + text}]}],
-      generationConfig: {responseModalities: ["AUDIO"], speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName: load("gvname") || "Orus"}}}}
+      generationConfig: {responseModalities: ["AUDIO"], speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName: "Orus"}}}}
     })
   });
   var d = await res.json();
@@ -195,6 +191,13 @@ async function ttsBuffer(text){
   }
   return buf;
 }
+async function ttsRetry(text){
+  for(var n = 0; n < 3; n++){
+    try{ var b = await ttsBuffer(text); ttsNote = ""; return b; }
+    catch(e){ ttsNote = e.message; await new Promise(function(r){ setTimeout(r, 500 * (n + 1)); }); }
+  }
+  return null;
+}
 function playBuf(buf, token){
   return new Promise(function(resolve){
     if(token !== speakToken){ resolve(); return; }
@@ -206,39 +209,29 @@ function playBuf(buf, token){
     s.start();
   });
 }
-function phoneSpeak(text, token){
-  return new Promise(function(resolve){
-    if(!window.speechSynthesis || token !== speakToken){ resolve(); return; }
-    var u = new SpeechSynthesisUtterance(text);
-    u.lang = CHARACTER.lang;
-    u.pitch = 0.75;
-    u.onend = resolve; u.onerror = resolve;
-    speechSynthesis.speak(u);
-  });
-}
-function chunks(t){
-  var p = (t.replace(/\s+/g, " ").match(/[^.!?]+[.!?]*/g) || [t]).map(function(x){ return x.trim(); }).filter(Boolean);
-  if(p.length < 2){ return p; }
-  return [p[0], p.slice(1).join(" ")];
-}
-async function speak(text){
+function makeSpeaker(){
   stopSpeech();
-  var token = speakToken;
+  var tok = speakToken, q = [], ended = false, wake = null, started = false;
   speaking = true;
-  setMood("speaking");
-  var parts = chunks(text);
-  var useAI = $("aivoice").checked;
-  var jobs = parts.map(function(c){
-    return useAI ? ttsBuffer(c).catch(function(e){ ttsNote = e.message; return null; }) : Promise.resolve(null);
-  });
-  for(var i = 0; i < parts.length; i++){
-    var buf = await jobs[i];
-    if(token !== speakToken){ return; }
-    if(buf){ await playBuf(buf, token); }
-    else { await phoneSpeak(parts[i], token); }
-    if(token !== speakToken){ return; }
-  }
-  speaking = false;
+  function poke(){ if(wake){ var w = wake; wake = null; w(); } }
+  var done = (async function(){
+    while(true){
+      if(!q.length){
+        if(ended){ break; }
+        await new Promise(function(r){ wake = r; });
+        continue;
+      }
+      var buf = await q.shift();
+      if(tok !== speakToken){ return; }
+      if(buf){
+        if(!started){ started = true; setMood("speaking"); }
+        await playBuf(buf, tok);
+      }
+      if(tok !== speakToken){ return; }
+    }
+    speaking = false;
+  })();
+  return {tok: tok, done: done, push: function(x){ q.push(ttsRetry(x)); poke(); }, end: function(){ ended = true; poke(); }};
 }
 
 var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -281,22 +274,44 @@ function endLive(){
   setMood("idle");
 }
 
-async function ask(){
-  var res = await fetch(BASE + encodeURIComponent(load("gmodel2") || DEFAULT_MODEL) + ":generateContent", {
+function parseSSE(chunk, onDelta){
+  var out = "";
+  chunk.split(/\r?\n/).forEach(function(line){
+    if(line.indexOf("data:") !== 0){ return; }
+    var j;
+    try{ j = JSON.parse(line.slice(5)); }catch(x){ return; }
+    var ps = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts;
+    if(ps){ ps.forEach(function(p){ if(p.text){ out += p.text; onDelta(p.text); } }); }
+  });
+  return out;
+}
+async function askStream(onDelta){
+  var live = liveOn;
+  var res = await fetch(BASE + encodeURIComponent(load("gmodel2") || DEFAULT_MODEL) + ":streamGenerateContent?alt=sse", {
     method: "POST",
     headers: {"Content-Type": "application/json", "x-goog-api-key": load("gkey")},
     body: JSON.stringify({
-      systemInstruction: {parts: [{text: CHARACTER.prompt}]},
+      systemInstruction: {parts: [{text: CHARACTER.prompt + (live ? LIVE_RULE : TEXT_RULE)}]},
       contents: msgs.map(function(m){ return {role: m.role, parts: [{text: m.text}]}; }),
-      generationConfig: {maxOutputTokens: 300, temperature: 0.8}
+      generationConfig: {maxOutputTokens: live ? 220 : 2048, temperature: 0.8}
     })
   });
-  var data = await res.json();
-  if(!res.ok){ throw new Error(data && data.error && data.error.message ? data.error.message : "Error " + res.status); }
-  var parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-  var text = parts ? parts.map(function(p){ return p.text || ""; }).join("") : "";
-  if(!text){ throw new Error("No answer came back. Try again."); }
-  return text;
+  if(!res.ok){
+    var d = await res.json().catch(function(){ return null; });
+    throw new Error(d && d.error && d.error.message ? d.error.message : "Error " + res.status);
+  }
+  var reader = res.body.getReader(), dec = new TextDecoder(), buf = "", full = "";
+  while(true){
+    var r = await reader.read();
+    if(r.done){ break; }
+    buf += dec.decode(r.value, {stream: true});
+    var ev = buf.split(/\r?\n\r?\n/);
+    buf = ev.pop();
+    ev.forEach(function(e){ full += parseSSE(e, onDelta); });
+  }
+  full += parseSSE(buf, onDelta);
+  if(!full){ throw new Error("No answer came back. Try again."); }
+  return full;
 }
 
 async function handle(text){
@@ -312,22 +327,39 @@ async function handle(text){
   var wait = bubble("a", "…");
   setMood("thinking");
   if(liveOn){ $("cap").textContent = "“" + text + "”"; }
+  var sp = (liveOn || $("readaloud").checked) ? makeSpeaker() : null;
+  var pend = "", acc = "";
+  function drain(fin){
+    while(true){
+      var m = pend.match(/^([\s\S]{20,}?[.!?])\s+/);
+      if(!m){ break; }
+      sp.push(m[1].trim());
+      pend = pend.slice(m[0].length);
+    }
+    if(fin && pend.trim()){ sp.push(pend.trim()); pend = ""; }
+  }
   try{
-    var answer = await ask();
+    var answer = await askStream(function(d){
+      acc += d;
+      wait.textContent = acc;
+      $("log").scrollTop = $("log").scrollHeight;
+      if(liveOn){ $("cap").textContent = acc; }
+      if(sp){ pend += d; drain(false); }
+    });
     msgs.push({role: "model", text: answer});
     store("history", JSON.stringify(msgs));
-    wait.textContent = answer;
-    $("log").scrollTop = $("log").scrollHeight;
-    if(liveOn){ $("cap").textContent = answer; }
     busy = false; $("b").disabled = false;
-    if(liveOn || $("readaloud").checked){
-      await speak(answer);
-      if(ttsNote){ $("vnote").textContent = "AI voice problem, phone voice used: " + ttsNote; ttsNote = ""; }
+    if(sp){
+      drain(true); sp.end();
+      await sp.done;
+      if(sp.tok !== speakToken){ return; }
+      if(ttsNote){ $("vnote").textContent = "Voice problem: " + ttsNote; if(liveOn){ $("lstat").textContent = "Voice problem, text only"; } ttsNote = ""; }
     }
     setMood(liveOn ? "listening" : "idle");
     if(liveOn){ listen(); }
   }catch(err){
-    msgs.pop();
+    if(sp){ sp.end(); }
+    if(!acc){ msgs.pop(); }
     wait.className = "m a err";
     wait.textContent = "Problem: " + err.message;
     busy = false; $("b").disabled = false;
@@ -344,9 +376,7 @@ function maskState(){
 function openSettings(api){
   maskState();
   $("model").value = load("gmodel2") || DEFAULT_MODEL;
-  $("aivoice").checked = load("aivoice") !== "0";
   $("readaloud").checked = load("readaloud") === "1";
-  $("vname").value = load("gvname") || "Orus";
   $("apiBox").open = !!api || !load("gkey");
   $("settings").classList.add("open");
 }
@@ -362,14 +392,15 @@ $("savekey").onclick = function(){
   maskState();
 };
 $("rmkey").onclick = function(){ store("gkey", null); maskState(); };
-$("aivoice").onchange = function(){ store("aivoice", this.checked ? "1" : "0"); };
 $("readaloud").onchange = function(){ store("readaloud", this.checked ? "1" : "0"); };
-$("vname").onchange = function(){ store("gvname", this.value); };
 $("testv").onclick = async function(){
   audio();
   $("vnote").textContent = "Playing…";
-  await speak("Good day, Sir! My name is Arjun, at your service.");
-  $("vnote").textContent = ttsNote ? "AI voice problem, phone voice used: " + ttsNote : "If the AI voice is not available, the phone voice is used instead.";
+  var sp = makeSpeaker();
+  sp.push("Good day, Sir! My name is Arjun, at your service.");
+  sp.end();
+  await sp.done;
+  $("vnote").textContent = ttsNote ? "Voice problem: " + ttsNote : "Voice works. Arjun has one fixed voice.";
   ttsNote = "";
   setMood("idle");
 };
