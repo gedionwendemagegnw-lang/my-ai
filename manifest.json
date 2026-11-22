@@ -1,13 +1,21 @@
 {
-  "name": "Arjun",
-  "short_name": "Arjun",
+  "name": "Real AI",
+  "short_name": "Real AI",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#faf9f5",
   "theme_color": "#d4620a",
   "icons": [
-    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
-    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }
