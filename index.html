@@ -34,7 +34,7 @@ button:disabled{opacity:.5}
 <body>
 <header>
 <b>My AI</b>
-<div class="hb"><button id="clr" type="button">Clear</button><button id="gear" type="button">Settings</button></div>
+<div class="hb"><button id="spk" type="button">Voice: off</button><button id="clr" type="button">Clear</button><button id="gear" type="button">Settings</button></div>
 </header>
 <div id="settings">
 <label for="key">Gemini API key</label>
@@ -47,6 +47,7 @@ button:disabled{opacity:.5}
 <div id="chat"></div>
 <form id="f">
 <textarea id="t" rows="1" placeholder="Type a message…"></textarea>
+<button id="mic" type="button" style="background:var(--card);color:var(--text);border:1px solid var(--border)">Mic</button>
 <button id="b" type="submit">Send</button>
 </form>
 <script>
@@ -139,6 +140,7 @@ document.getElementById("f").addEventListener("submit", async function(e){
   try{
     var answer = await ask();
     thinking.textContent = answer;
+    speak(answer);
     msgs.push({role:"model", text:answer});
     store("history", JSON.stringify(msgs));
   }catch(err){
@@ -150,6 +152,48 @@ document.getElementById("f").addEventListener("submit", async function(e){
   busy = false; b.disabled = false; t.focus();
 });
 
+var speakOn = load("speak") === "1";
+var spk = document.getElementById("spk");
+function paintSpk(){ spk.textContent = speakOn ? "Voice: on" : "Voice: off"; }
+paintSpk();
+spk.onclick = function(){
+  speakOn = !speakOn;
+  store("speak", speakOn ? "1" : "0");
+  paintSpk();
+  if(!speakOn && window.speechSynthesis){ speechSynthesis.cancel(); }
+};
+function speak(text){
+  if(!speakOn || !window.speechSynthesis){ return; }
+  speechSynthesis.cancel();
+  var u = new SpeechSynthesisUtterance(text);
+  speechSynthesis.speak(u);
+}
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+var mic = document.getElementById("mic");
+var rec = null;
+var listening = false;
+if(!SR){ mic.style.display = "none"; }
+else {
+  mic.onclick = function(){
+    if(listening){ rec.stop(); return; }
+    if(window.speechSynthesis){ speechSynthesis.cancel(); }
+    rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.continuous = false;
+    rec.onstart = function(){ listening = true; mic.textContent = "Stop"; };
+    rec.onend = function(){ listening = false; mic.textContent = "Mic"; };
+    rec.onerror = function(e){
+      listening = false; mic.textContent = "Mic";
+      if(e.error === "not-allowed"){ alert("Please allow the microphone for this site."); }
+    };
+    rec.onresult = function(e){
+      t.value = e.results[0][0].transcript;
+      document.getElementById("f").requestSubmit();
+    };
+    rec.start();
+  };
+}
 restore();
 </script>
 </body>
